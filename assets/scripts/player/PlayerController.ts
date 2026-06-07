@@ -1,4 +1,5 @@
-import { _decorator, Component, Node, input, Input, KeyCode, EventKeyboard, Enum, RigidBody2D, Vec2, Vec3, tween, Quat } from 'cc';
+import { _decorator, Component, Node, input, Input, KeyCode, EventKeyboard, Enum, RigidBody2D, Vec2, Vec3, tween } from 'cc';
+import { CommandType, PlayerCommand } from '../core/InputRouter';
 const { ccclass, property } = _decorator;
 
 @ccclass('PlayerController')
@@ -67,6 +68,7 @@ export class PlayerController extends Component {
     private _moveDirection: number = 0;
     private _isSwingUp: boolean = false;
     private _isSwingDown: boolean = false;
+    private _hitLocked: boolean = false;
 
     // 引用 GameManager 组件（运行时查找）
     private _gameManager: any = null;
@@ -89,31 +91,53 @@ export class PlayerController extends Component {
 
     private onKeyDown(event: EventKeyboard) {
         if (event.keyCode === this.leftKey) {
-            this._moveDirection = -1;
+            this.handleCommand({ playerId: this.playerId, type: CommandType.MOVE_LEFT, timestamp: Date.now() });
         } else if (event.keyCode === this.rightKey) {
-            this._moveDirection = 1;
+            this.handleCommand({ playerId: this.playerId, type: CommandType.MOVE_RIGHT, timestamp: Date.now() });
         } else if (event.keyCode === this.swingUpKey) {
-            this._isSwingUp = true;
-            this.playSwingAnimation(true);
-            this.onSwing();
+            this.handleCommand({ playerId: this.playerId, type: CommandType.SWING_UP, timestamp: Date.now() });
         } else if (event.keyCode === this.swingDownKey) {
-            this._isSwingDown = true;
-            this.playSwingAnimation(false);
-            this.onSwing();
+            this.handleCommand({ playerId: this.playerId, type: CommandType.SWING_DOWN, timestamp: Date.now() });
         }
     }
 
     private onKeyUp(event: EventKeyboard) {
         if (event.keyCode === this.leftKey || event.keyCode === this.rightKey) {
-            this._moveDirection = 0;
+            this.handleCommand({ playerId: this.playerId, type: CommandType.STOP_MOVE, timestamp: Date.now() });
         } else if (event.keyCode === this.swingUpKey) {
             this._isSwingUp = false;
-            this.playSwingAnimation(true);
-            this.onSwing();
+            this._hitLocked = false;
         } else if (event.keyCode === this.swingDownKey) {
             this._isSwingDown = false;
-            this.playSwingAnimation(true);
-            this.onSwing();
+            this._hitLocked = false;
+        }
+    }
+
+    public handleCommand(command: PlayerCommand): void {
+        if (command.playerId !== this.playerId) {
+            return;
+        }
+
+        switch (command.type) {
+            case CommandType.MOVE_LEFT:
+                this._moveDirection = -1;
+                break;
+            case CommandType.MOVE_RIGHT:
+                this._moveDirection = 1;
+                break;
+            case CommandType.STOP_MOVE:
+                this._moveDirection = 0;
+                break;
+            case CommandType.SWING_UP:
+                this._isSwingUp = true;
+                this.playSwingAnimation(true);
+                this.onSwing();
+                break;
+            case CommandType.SWING_DOWN:
+                this._isSwingDown = true;
+                this.playSwingAnimation(false);
+                this.onSwing();
+                break;
         }
     }
 
@@ -141,8 +165,6 @@ export class PlayerController extends Component {
         tween(this.racketNode).stop();
 
         const targetAngle = isUp ? this.swingAngleUp : this.swingAngleDown;
-        const currentAngle = this.racketNode.eulerAngles.z; // 当前 z 轴旋转
-
         // 挥动到目标角度
         tween(this.racketNode)
             .to(this.swingDuration, { eulerAngles: new Vec3(0, 0, targetAngle) }, { easing: 'quadOut' })
@@ -164,15 +186,18 @@ export class PlayerController extends Component {
         if (dist < this.hitRange) {
             const ballBody = this.shuttlecockNode.getComponent(RigidBody2D) ;
             if (ballBody) {
+                if (this._hitLocked) {
+                    return;
+                }
+
                 // 根据玩家方向确定水平力方向
-                let dirX = this.node.name === 'Player1' ? 1 : -1;
+                const dirX = this.playerId === 1 ? 1 : -1;
                 // 上挥时垂直力度向上，下挥时可向下或较小向上
-                let forceY = this._isSwingUp ? this.hitForceY : this.hitForceY * 0.5;
+                const forceY = this._isSwingUp ? this.hitForceY : this.hitForceY * 0.5;
                 const impulse = new Vec2(this.hitForceX * dirX, forceY);
                 ballBody.applyLinearImpulseToCenter(impulse, true);
                 // 防止一帧内多次击打（松开键前只打一次，可通过添加冷却，这里简单置位）
-                this._isSwingUp = false;
-                this._isSwingDown = false;
+                this._hitLocked = true;
             }
         }
     }

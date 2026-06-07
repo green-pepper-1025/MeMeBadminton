@@ -1,4 +1,4 @@
-import { _decorator, Component, EventKeyboard, KeyCode, SystemEventType } from 'cc';
+import { _decorator, Component, EventKeyboard, input, Input, KeyCode } from 'cc';
 const { ccclass, property } = _decorator;
 
 /**
@@ -74,9 +74,14 @@ export class InputRouter extends Component {
      */
     private registerInputEvents() {
         // 键盘按下
-        this.node.on(SystemEventType.KEY_DOWN, this.onKeyDown, this);
+        input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
         // 键盘抬起
-        this.node.on(SystemEventType.KEY_UP, this.onKeyUp, this);
+        input.on(Input.EventType.KEY_UP, this.onKeyUp, this);
+    }
+
+    onDestroy() {
+        input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this);
+        input.off(Input.EventType.KEY_UP, this.onKeyUp, this);
     }
 
     /**
@@ -176,4 +181,3 @@ export class InputRouter extends Component {
         }
     }
 }
-
