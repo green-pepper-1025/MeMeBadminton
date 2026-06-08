@@ -13,6 +13,7 @@ import {
     tween,
 } from 'cc';
 import { CommandType, PlayerCommand } from '../core/InputRouter';
+import { JumpMotion } from '../core/JumpMotion';
 const { ccclass, property } = _decorator;
 
 @ccclass('PlayerController')
@@ -91,10 +92,13 @@ export class PlayerController extends Component {
     private _isSwingUp: boolean = false;
     private _isSwingDown: boolean = false;
     private _hitLocked: boolean = false;
-    private _verticalSpeed: number = 0;
     private _groundY: number = -250;
-    private _isGrounded: boolean = true;
     private _lastSwingAngle: number = 0;
+    private _jumpMotion: JumpMotion = new JumpMotion({
+        groundY: this._groundY,
+        jumpSpeed: this.jumpSpeed,
+        gravity: this.gravity,
+    });
 
     // 引用 GameManager 组件（运行时查找）
     private _gameManager: any = null;
@@ -113,6 +117,12 @@ export class PlayerController extends Component {
         if (this.playerId === 2 && this.skillKey === KeyCode.SPACE) {
             this.skillKey = KeyCode.ENTER;
         }
+        this.configureDefaultKeysForPlayer2();
+        this._jumpMotion.configure({
+            groundY: this._groundY,
+            jumpSpeed: this.jumpSpeed,
+            gravity: this.gravity,
+        });
     }
 
     onDestroy() {
@@ -221,6 +231,19 @@ export class PlayerController extends Component {
         }
     }
 
+    private configureDefaultKeysForPlayer2(): void {
+        if (this.playerId !== 2) {
+            return;
+        }
+
+        if (this.leftKey === KeyCode.KEY_A) this.leftKey = KeyCode.ARROW_LEFT;
+        if (this.rightKey === KeyCode.KEY_D) this.rightKey = KeyCode.ARROW_RIGHT;
+        if (this.jumpKey === KeyCode.KEY_W) this.jumpKey = KeyCode.ARROW_UP;
+        if (this.swingUpKey === KeyCode.KEY_W) this.swingUpKey = KeyCode.ARROW_UP;
+        if (this.swingDownKey === KeyCode.KEY_S) this.swingDownKey = KeyCode.ARROW_DOWN;
+        if (this.skillKey === KeyCode.SPACE) this.skillKey = KeyCode.ENTER;
+    }
+
     private playSwingAnimation(isUp: boolean) {
         if (!this.rightArmNode) return;
 
@@ -243,12 +266,7 @@ export class PlayerController extends Component {
     }
 
     private jump(): void {
-        if (!this._isGrounded) {
-            return;
-        }
-
-        this._isGrounded = false;
-        this._verticalSpeed = this.jumpSpeed;
+        this._jumpMotion.tryJump();
     }
 
     private checkAndHit(): boolean {
@@ -318,6 +336,11 @@ export class PlayerController extends Component {
 
         // 更新腿部摆动和手臂摆动（移动时才动）
         this.updateLimbAnimations(deltaTime);
+
+        const jumpState = this._jumpMotion.step(this.node.position.y, deltaTime);
+        if (jumpState.y !== this.node.position.y) {
+            this.node.setPosition(this.node.position.x, jumpState.y, this.node.position.z);
+        }
 
         // 挥拍击球检测
         if ((this._isSwingUp || this._isSwingDown) && this.racketNode && this.shuttlecockNode) {
