@@ -18,6 +18,7 @@ import { SkillExecutor } from '../skill/SkillExecutor';
 import { SkillPlayerId, SkillSystem } from '../skill/SkillSystem';
 import { LocalCharacterSelect } from './LocalCharacterSelect';
 import { buildScoreboardModel, buildSkillMeterModel } from './BattleHudModel';
+import { ShuttleCourtCollision } from '../ball/ShuttleCollision';
 const { ccclass, property } = _decorator;
 
 type GameState = 'waitingServe' | 'playing' | 'roundEnd' | 'matchEnd';
@@ -198,6 +199,7 @@ export class GameManager extends Component {
             this._player2StartPos = this._player2Node.position.clone();
         }
 
+        this.ensureShuttleCollision();
         this.collectBattleNodes();
         this.createBattleHud();
         this.createFlowRoot();
@@ -255,6 +257,7 @@ export class GameManager extends Component {
         // 激活球并放到球拍位置
         ball.active = true;
         ball.setWorldPosition(racketWorldPos);
+        ball.getComponent(ShuttleCourtCollision)?.resetFlightState(true);
 
         // 获取球的刚体
         const ballBody = ball.getComponent(RigidBody2D);
@@ -390,7 +393,20 @@ export class GameManager extends Component {
             ballBody.angularVelocity = 0;
         }
 
+        this.shuttlecock.getComponent(ShuttleCourtCollision)?.resetFlightState(false);
         this.shuttlecock.active = false;
+    }
+
+    private ensureShuttleCollision(): void {
+        if (!this.shuttlecock) {
+            return;
+        }
+
+        const collision =
+            this.shuttlecock.getComponent(ShuttleCourtCollision) ?? this.shuttlecock.addComponent(ShuttleCourtCollision);
+        collision.gameManagerNode = this.node;
+        collision.netNode = this.netNode;
+        collision.floorY = this.floorY;
     }
 
     private updateScoreLabels(): void {

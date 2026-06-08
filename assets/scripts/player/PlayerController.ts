@@ -309,7 +309,7 @@ export class PlayerController extends Component {
     }
 
     // 更新腿部与左臂（非握拍手）的摆动
-    private updateLimbAnimations(dt: number) {
+    private updateLimbAnimations(_dt: number) {
         const time = Date.now() / 1000; // 或者使用累计时间，这里简单用当前时间
         // 根据移动方向计算摆幅（静止时不摆）
         const active = Math.abs(this._moveDirection) > 0;
