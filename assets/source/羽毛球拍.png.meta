@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "b0e461e2-b389-44e2-89ad-055d5fd5472a",
+  "uuid": "556c9863-03d0-451e-948b-c68639063b91",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "b0e461e2-b389-44e2-89ad-055d5fd5472a@6c48a",
-      "displayName": "人",
+      "uuid": "556c9863-03d0-451e-948b-c68639063b91@6c48a",
+      "displayName": "羽毛球拍",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "b0e461e2-b389-44e2-89ad-055d5fd5472a",
+        "imageUuidOrDatabaseUri": "556c9863-03d0-451e-948b-c68639063b91",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,21 +34,21 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "b0e461e2-b389-44e2-89ad-055d5fd5472a@f9941",
-      "displayName": "人",
+      "uuid": "556c9863-03d0-451e-948b-c68639063b91@f9941",
+      "displayName": "羽毛球拍",
       "id": "f9941",
       "name": "spriteFrame",
       "userData": {
         "trimThreshold": 1,
         "rotated": false,
-        "offsetX": 0,
+        "offsetX": 2.5,
         "offsetY": 0,
-        "trimX": 0,
+        "trimX": 5,
         "trimY": 0,
-        "width": 229,
-        "height": 316,
-        "rawWidth": 229,
-        "rawHeight": 316,
+        "width": 628,
+        "height": 1607,
+        "rawWidth": 633,
+        "rawHeight": 1607,
         "borderTop": 0,
         "borderBottom": 0,
         "borderLeft": 0,
@@ -60,17 +60,17 @@
         "meshType": 0,
         "vertices": {
           "rawPosition": [
-            -114.5,
-            -158,
+            -314,
+            -803.5,
             0,
-            114.5,
-            -158,
+            314,
+            -803.5,
             0,
-            -114.5,
-            158,
+            -314,
+            803.5,
             0,
-            114.5,
-            158,
+            314,
+            803.5,
             0
           ],
           "indexes": [
@@ -82,38 +82,38 @@
             3
           ],
           "uv": [
+            5,
+            1607,
+            633,
+            1607,
+            5,
             0,
-            316,
-            229,
-            316,
-            0,
-            0,
-            229,
+            633,
             0
           ],
           "nuv": [
-            0,
+            0.007898894154818325,
             0,
             1,
             0,
-            0,
+            0.007898894154818325,
             1,
             1,
             1
           ],
           "minPos": [
-            -114.5,
-            -158,
+            -314,
+            -803.5,
             0
           ],
           "maxPos": [
-            114.5,
-            158,
+            314,
+            803.5,
             0
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "b0e461e2-b389-44e2-89ad-055d5fd5472a@6c48a",
+        "imageUuidOrDatabaseUri": "556c9863-03d0-451e-948b-c68639063b91@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -129,6 +129,6 @@
     "type": "sprite-frame",
     "fixAlphaTransparencyArtifacts": false,
     "hasAlpha": true,
-    "redirect": "b0e461e2-b389-44e2-89ad-055d5fd5472a@6c48a"
+    "redirect": "556c9863-03d0-451e-948b-c68639063b91@6c48a"
   }
 }
