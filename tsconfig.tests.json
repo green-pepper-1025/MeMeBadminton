@@ -9,6 +9,7 @@
     },
     "include": [
         "tests/**/*.ts",
+        "assets/scripts/core/BattleHudModel.ts",
         "assets/scripts/core/LocalCharacterSelect.ts",
         "assets/scripts/skill/SkillSystem.ts",
         "server/**/*.ts"

@@ -17,6 +17,7 @@ import { NetworkClient, BallStatePayload, RoomSnapshot, ScoreUpdatePayload } fro
 import { SkillExecutor } from '../skill/SkillExecutor';
 import { SkillPlayerId, SkillSystem } from '../skill/SkillSystem';
 import { LocalCharacterSelect } from './LocalCharacterSelect';
+import { buildScoreboardModel, buildSkillMeterModel } from './BattleHudModel';
 const { ccclass, property } = _decorator;
 
 type GameState = 'waitingServe' | 'playing' | 'roundEnd' | 'matchEnd';
@@ -48,6 +49,24 @@ interface MatchResult {
     winnerPlayerId: PlayerId;
     player1RoundsWon: number;
     player2RoundsWon: number;
+}
+
+interface ScoreboardHudRefs {
+    root: Node;
+    player1NameLabel: Label;
+    player2NameLabel: Label;
+    score1Label: Label;
+    score2Label: Label;
+    gameLabel: Label;
+    roundsLabel: Label;
+}
+
+interface SkillMeterHudRefs {
+    root: Node;
+    fillGraphics: Graphics;
+    playerLabel: Label;
+    usesLabel: Label;
+    color: Color;
 }
 
 @ccclass('GameManager')
@@ -111,6 +130,12 @@ export class GameManager extends Component {
     private _appState: AppState = 'main_menu';
     private _battleMode: BattleMode = 'local';
     private _flowRoot: Node = null;
+    private _battleHudRoot: Node = null;
+    private _scoreboardHud: ScoreboardHudRefs = null;
+    private _skillMeterHuds: Record<SkillPlayerId, SkillMeterHudRefs> = {
+        player1: null,
+        player2: null,
+    };
     private _canvasNode: Node = null;
     private _battleNodes: Node[] = [];
     private _player1Node: Node = null;
@@ -174,6 +199,7 @@ export class GameManager extends Component {
         }
 
         this.collectBattleNodes();
+        this.createBattleHud();
         this.createFlowRoot();
         this.registerNetworkHandlers();
         this.enterMainMenu();
@@ -369,11 +395,15 @@ export class GameManager extends Component {
 
     private updateScoreLabels(): void {
         if (this.score1Label) {
-            this.score1Label.string = `P1 ${this._score1} (${this._roundsWon1})\n${this.getSkillStatusText('player1')}`;
+            this.score1Label.node.active = false;
         }
         if (this.score2Label) {
-            this.score2Label.string = `P2 ${this._score2} (${this._roundsWon2})\n${this.getSkillStatusText('player2')}`;
+            this.score2Label.node.active = false;
         }
+
+        this.updateScoreboardHud();
+        this.updateSkillMeterHud('player1');
+        this.updateSkillMeterHud('player2');
     }
 
     update(deltaTime: number): void {
@@ -427,6 +457,193 @@ export class GameManager extends Component {
         if (this.netNode) {
             this.netNode.active = true;
         }
+    }
+
+    private createBattleHud(): void {
+        if (!this._canvasNode) {
+            return;
+        }
+
+        this._battleHudRoot = new Node('BattleHudRoot');
+        this._canvasNode.addChild(this._battleHudRoot);
+        this._battleHudRoot.addComponent(UITransform).setContentSize(1280, 720);
+        this._battleHudRoot.setPosition(0, 0, 0);
+        this._battleNodes.push(this._battleHudRoot);
+
+        this._scoreboardHud = this.createScoreboardHud();
+        this._skillMeterHuds.player1 = this.createSkillMeterHud('Player1SkillHud', -455, 252, new Color(55, 174, 255, 255));
+        this._skillMeterHuds.player2 = this.createSkillMeterHud('Player2SkillHud', 455, 252, new Color(255, 96, 86, 255));
+    }
+
+    private createScoreboardHud(): ScoreboardHudRefs {
+        const root = new Node('BadmintonScoreboard');
+        this._battleHudRoot.addChild(root);
+        root.setPosition(0, 292, 0);
+        root.addComponent(UITransform).setContentSize(500, 100);
+
+        const background = root.addComponent(Graphics);
+        background.fillColor = new Color(18, 24, 34, 220);
+        background.roundRect(-250, -50, 500, 100, 8);
+        background.fill();
+        background.strokeColor = new Color(105, 235, 255, 165);
+        background.lineWidth = 3;
+        background.roundRect(-250, -50, 500, 100, 8);
+        background.stroke();
+
+        this.addHudPanelAccent(root, -238, 34, 476, 6, new Color(255, 255, 255, 36));
+        this.addHudPanelAccent(root, -238, -40, 476, 5, new Color(0, 0, 0, 70));
+
+        const player1NameLabel = this.addHudLabel(root, 'P1Name', -164, 14, 18, 130);
+        const score1Label = this.addHudLabel(root, 'P1Score', -78, 8, 46, 86);
+        const vsLabel = this.addHudLabel(root, 'VsLabel', 0, 8, 19, 56);
+        const score2Label = this.addHudLabel(root, 'P2Score', 78, 8, 46, 86);
+        const player2NameLabel = this.addHudLabel(root, 'P2Name', 164, 14, 18, 130);
+        const gameLabel = this.addHudLabel(root, 'GameLabel', 0, -28, 18, 140);
+        const roundsLabel = this.addHudLabel(root, 'RoundsLabel', 0, -6, 15, 70);
+
+        vsLabel.string = 'VS';
+        vsLabel.color = new Color(255, 220, 91, 255);
+        score1Label.color = Color.WHITE;
+        score2Label.color = Color.WHITE;
+        gameLabel.color = new Color(165, 233, 255, 255);
+        roundsLabel.color = new Color(255, 220, 91, 255);
+
+        return {
+            root,
+            player1NameLabel,
+            player2NameLabel,
+            score1Label,
+            score2Label,
+            gameLabel,
+            roundsLabel,
+        };
+    }
+
+    private createSkillMeterHud(name: string, x: number, y: number, color: Color): SkillMeterHudRefs {
+        const root = new Node(name);
+        this._battleHudRoot.addChild(root);
+        root.setPosition(x, y, 0);
+        root.addComponent(UITransform).setContentSize(270, 72);
+
+        const background = root.addComponent(Graphics);
+        background.fillColor = new Color(20, 25, 35, 188);
+        background.roundRect(-135, -36, 270, 72, 8);
+        background.fill();
+        background.strokeColor = new Color(255, 255, 255, 100);
+        background.lineWidth = 2;
+        background.roundRect(-135, -36, 270, 72, 8);
+        background.stroke();
+
+        const fillNode = new Node('EnergyFill');
+        root.addChild(fillNode);
+        fillNode.setPosition(0, -8, 0);
+        fillNode.addComponent(UITransform).setContentSize(218, 22);
+        const fillGraphics = fillNode.addComponent(Graphics);
+
+        const playerLabel = this.addHudLabel(root, 'PlayerLabel', -58, 18, 18, 120);
+        const statusLabel = this.addHudLabel(root, 'SpecialLabel', 45, 18, 14, 90);
+        const usesLabel = this.addHudLabel(root, 'UsesLabel', 104, -8, 18, 46);
+
+        statusLabel.string = 'SPECIAL';
+        statusLabel.color = new Color(255, 220, 91, 255);
+        usesLabel.color = Color.WHITE;
+
+        return {
+            root,
+            fillGraphics,
+            playerLabel,
+            usesLabel,
+            color,
+        };
+    }
+
+    private updateScoreboardHud(): void {
+        if (!this._scoreboardHud) {
+            return;
+        }
+
+        const model = buildScoreboardModel({
+            player1Name: this.getHudPlayerName('player1'),
+            player2Name: this.getHudPlayerName('player2'),
+            score1: this._score1,
+            score2: this._score2,
+            roundsWon1: this._roundsWon1,
+            roundsWon2: this._roundsWon2,
+        });
+
+        this._scoreboardHud.player1NameLabel.string = model.player1Name;
+        this._scoreboardHud.player2NameLabel.string = model.player2Name;
+        this._scoreboardHud.score1Label.string = model.score1Text;
+        this._scoreboardHud.score2Label.string = model.score2Text;
+        this._scoreboardHud.gameLabel.string = model.gameText;
+        this._scoreboardHud.roundsLabel.string = model.roundsText;
+    }
+
+    private updateSkillMeterHud(playerId: SkillPlayerId): void {
+        const hud = this._skillMeterHuds[playerId];
+        if (!hud) {
+            return;
+        }
+
+        hud.playerLabel.string = playerId === 'player1' ? 'P1' : 'P2';
+
+        try {
+            const state = this._skillSystem.getState(playerId);
+            const model = buildSkillMeterModel(state);
+            hud.usesLabel.string = model.usesText;
+            this.drawSkillMeterFill(hud.fillGraphics, model.fillRatio, model.isFull ? new Color(255, 220, 91, 255) : hud.color);
+        } catch {
+            hud.usesLabel.string = 'x0';
+            this.drawSkillMeterFill(hud.fillGraphics, 0, hud.color);
+        }
+    }
+
+    private drawSkillMeterFill(graphics: Graphics, ratio: number, color: Color): void {
+        const width = 218;
+        const height = 22;
+        const fillWidth = Math.max(0, Math.min(width, width * ratio));
+
+        graphics.clear();
+        graphics.fillColor = new Color(0, 0, 0, 96);
+        graphics.roundRect(-width / 2, -height / 2, width, height, 8);
+        graphics.fill();
+
+        if (fillWidth > 0) {
+            graphics.fillColor = color;
+            graphics.roundRect(-width / 2, -height / 2, fillWidth, height, 8);
+            graphics.fill();
+            graphics.fillColor = new Color(255, 255, 255, 72);
+            graphics.roundRect(-width / 2 + 4, 1, Math.max(0, fillWidth - 8), 6, 4);
+            graphics.fill();
+        }
+
+        graphics.strokeColor = new Color(255, 255, 255, 145);
+        graphics.lineWidth = 2;
+        graphics.roundRect(-width / 2, -height / 2, width, height, 8);
+        graphics.stroke();
+    }
+
+    private addHudPanelAccent(parent: Node, x: number, y: number, width: number, height: number, color: Color): void {
+        const accentNode = new Node('HudAccent');
+        parent.addChild(accentNode);
+        accentNode.setPosition(0, 0, 0);
+        const graphics = accentNode.addComponent(Graphics);
+        graphics.fillColor = color;
+        graphics.roundRect(x, y, width, height, 3);
+        graphics.fill();
+    }
+
+    private addHudLabel(parent: Node, name: string, x: number, y: number, fontSize: number, width: number): Label {
+        const labelNode = new Node(name);
+        parent.addChild(labelNode);
+        labelNode.setPosition(x, y, 0);
+        labelNode.addComponent(UITransform).setContentSize(width, 30);
+        const label = labelNode.addComponent(Label);
+        label.fontSize = fontSize;
+        label.color = Color.WHITE;
+        label.horizontalAlign = Label.HorizontalAlign.CENTER;
+        label.verticalAlign = Label.VerticalAlign.CENTER;
+        return label;
     }
 
     private createFlowRoot(): void {
@@ -1138,6 +1355,24 @@ export class GameManager extends Component {
         return this._characters.find((character) => character.characterId === characterId) ?? this._characters[0];
     }
 
+    private getHudPlayerName(playerId: PlayerId): string {
+        const characterId =
+            this._matchSetup?.players.find((player) => player.playerId === playerId)?.characterId ??
+            this._selectedCharacters[playerId];
+
+        if (characterId === 'kobe') {
+            return 'KOBE';
+        }
+        if (characterId === 'caixukun') {
+            return 'KUN';
+        }
+        if (characterId === 'nailong') {
+            return 'NAILONG';
+        }
+
+        return playerId === 'player1' ? 'P1' : 'P2';
+    }
+
     private getCharacterSpriteFrame(characterId: string): SpriteFrame {
         if (characterId === 'kobe') {
             return this.kobeSpriteFrame;
@@ -1154,16 +1389,6 @@ export class GameManager extends Component {
 
     private toSkillPlayerId(playerId: number): SkillPlayerId {
         return playerId === 1 ? 'player1' : 'player2';
-    }
-
-    private getSkillStatusText(playerId: SkillPlayerId): string {
-        try {
-            const state = this._skillSystem.getState(playerId);
-            const readyText = state.isReady ? 'READY' : `${Math.floor(state.charge)}%`;
-            return `技能 ${readyText} x${state.usesRemaining}`;
-        } catch {
-            return '技能 --';
-        }
     }
 
     private createRoomId(): string {
