@@ -7,5 +7,10 @@
         "skipLibCheck": true,
         "outDir": "temp/test-dist"
     },
-    "include": ["tests/**/*.ts", "assets/scripts/skill/SkillSystem.ts", "server/**/*.ts"]
+    "include": [
+        "tests/**/*.ts",
+        "assets/scripts/core/LocalCharacterSelect.ts",
+        "assets/scripts/skill/SkillSystem.ts",
+        "server/**/*.ts"
+    ]
 }

@@ -16,6 +16,7 @@ import { PlayerCommand } from './InputRouter';
 import { NetworkClient, BallStatePayload, RoomSnapshot, ScoreUpdatePayload } from '../net/NetworkClient';
 import { SkillExecutor } from '../skill/SkillExecutor';
 import { SkillPlayerId, SkillSystem } from '../skill/SkillSystem';
+import { LocalCharacterSelect } from './LocalCharacterSelect';
 const { ccclass, property } = _decorator;
 
 type GameState = 'waitingServe' | 'playing' | 'roundEnd' | 'matchEnd';
@@ -86,6 +87,12 @@ export class GameManager extends Component {
     @property(SpriteFrame)
     public nailongSpriteFrame: SpriteFrame = null;
 
+    @property
+    public characterBodyWidth: number = 96;
+
+    @property
+    public characterBodyHeight: number = 132;
+
     private _score1: number = 0;
     private _score2: number = 0;
     private _roundsWon1: number = 0;
@@ -118,6 +125,7 @@ export class GameManager extends Component {
     private readonly _network: NetworkClient = NetworkClient.getInstance();
     private readonly _skillSystem: SkillSystem = new SkillSystem();
     private readonly _skillExecutor: SkillExecutor = new SkillExecutor();
+    private readonly _localCharacterSelect: LocalCharacterSelect = new LocalCharacterSelect('kobe', 'caixukun');
     private _selectedCharacters: Record<PlayerId, string> = {
         player1: 'kobe',
         player2: 'caixukun',
@@ -454,7 +462,16 @@ export class GameManager extends Component {
         this.addLabel('抽象羽球大乱斗', 0, 170, 44);
         this.addLabel('Meme Badminton', 0, 115, 26);
         this.addButton('双人联机', 0, 30, 260, 64, () => this.enterOnlineRoom());
-        this.addButton('本地双人', 0, -55, 260, 64, () => this.startBattle('local'));
+        this.addButton('本地双人', 0, -55, 260, 64, () => this.enterLocalCharacterSelect());
+    }
+
+    private enterLocalCharacterSelect(): void {
+        this._appState = 'character_select';
+        this._battleMode = 'local';
+        this._matchSetup = null;
+        this._localCharacterSelect.reset();
+        this.clearFlowRoot();
+        this.renderCharacterSelect();
     }
 
     private enterOnlineRoom(): void {
@@ -490,6 +507,11 @@ export class GameManager extends Component {
         this.clearFlowRoot();
         this.setBattleVisible(false);
 
+        if (this._battleMode === 'local') {
+            this.renderLocalCharacterSelect();
+            return;
+        }
+
         this.addLabel('选择角色', 0, 205, 38);
 
         const localPlayerId = this._battleMode === 'online' ? this._localPlayerId : 'player1';
@@ -522,17 +544,53 @@ export class GameManager extends Component {
         this.addButton('返回房间', 0, -200, 180, 46, () => this.enterOnlineRoom(), new Color(78, 84, 96, 255));
     }
 
+    private renderLocalCharacterSelect(): void {
+        this.addLabel('本地双人选角', 0, 220, 38);
+        this.addLocalPlayerSelectColumn('player1', -310, 'P1');
+        this.addLocalPlayerSelectColumn('player2', 310, 'P2');
+
+        const readyText = this._localCharacterSelect.isReadyToStart() ? '双方已确认，准备开始' : '双方确认后开始对战';
+        this.addLabel(readyText, 0, -170, 22);
+        this.addButton('返回主菜单', 0, -230, 210, 48, () => this.enterMainMenu(), new Color(78, 84, 96, 255));
+    }
+
+    private addLocalPlayerSelectColumn(playerId: PlayerId, x: number, title: string): void {
+        const selectedCharacter = this.getCharacter(this._localCharacterSelect.getSelectedCharacter(playerId));
+        const confirmed = this._localCharacterSelect.isConfirmed(playerId);
+
+        this.addLabel(`${title} ${confirmed ? '已确认' : '选择中'}`, x, 150, 28, 460);
+        this._characters.forEach((character, index) => {
+            const isSelected = selectedCharacter.characterId === character.characterId;
+            const buttonColor = isSelected ? new Color(42, 126, 210, 255) : new Color(78, 84, 96, 255);
+            this.addButton(
+                character.displayName,
+                x - 150 + index * 150,
+                85,
+                130,
+                52,
+                () => this.selectCharacter(playerId, character.characterId),
+                buttonColor,
+            );
+        });
+        this.addLabel(`当前: ${selectedCharacter.displayName}`, x, 20, 24, 460);
+        this.addLabel(`技能: ${selectedCharacter.description}`, x, -20, 22, 460);
+        this.addButton(confirmed ? '已确认' : `确认${title}角色`, x, -95, 230, 54, () =>
+            this.confirmCharacter(playerId),
+        );
+    }
+
     private selectCharacter(playerId: PlayerId, characterId: string): void {
+        if (this._battleMode === 'local') {
+            this._localCharacterSelect.selectCharacter(playerId, characterId);
+            this.renderCharacterSelect();
+            return;
+        }
+
         if (this._confirmedPlayers[playerId]) {
             return;
         }
 
         this._selectedCharacters[playerId] = characterId;
-        if (this._battleMode === 'local' && playerId === 'player1') {
-            const opponentIndex =
-                (this._characters.findIndex((item) => item.characterId === characterId) + 1) % this._characters.length;
-            this._selectedCharacters.player2 = this._characters[opponentIndex].characterId;
-        }
 
         if (this._battleMode === 'online') {
             this._network.selectCharacter(characterId);
@@ -541,6 +599,18 @@ export class GameManager extends Component {
     }
 
     private confirmCharacter(playerId: PlayerId): void {
+        if (this._battleMode === 'local') {
+            this._localCharacterSelect.confirmPlayer(playerId);
+            if (this._localCharacterSelect.isReadyToStart()) {
+                this._matchSetup = this._localCharacterSelect.createMatchSetup();
+                this.startBattle('local');
+                return;
+            }
+
+            this.renderCharacterSelect();
+            return;
+        }
+
         this._confirmedPlayers[playerId] = true;
 
         if (this._battleMode === 'online') {
@@ -562,7 +632,7 @@ export class GameManager extends Component {
         this._appState = 'battle';
         this._battleMode = mode;
 
-        if (mode === 'local') {
+        if (mode === 'local' && !this._matchSetup) {
             this._matchSetup = {
                 roomId: 'LOCAL',
                 localPlayerId: 'player1',
@@ -616,7 +686,7 @@ export class GameManager extends Component {
             if (this._battleMode === 'online') {
                 this.enterCharacterSelect();
             } else {
-                this.startBattle('local');
+                this.enterLocalCharacterSelect();
             }
         });
     }
@@ -716,9 +786,15 @@ export class GameManager extends Component {
 
             const spriteFrame = this.getCharacterSpriteFrame(character.characterId);
             if (spriteFrame) {
-                bodySprite.spriteFrame = spriteFrame;
+                this.applyCharacterAppearance(bodySprite, spriteFrame);
             }
         }
+    }
+
+    private applyCharacterAppearance(bodySprite: Sprite, spriteFrame: SpriteFrame): void {
+        bodySprite.spriteFrame = spriteFrame;
+        const transform = bodySprite.node.getComponent(UITransform);
+        transform?.setContentSize(this.characterBodyWidth, this.characterBodyHeight);
     }
 
     private registerNetworkHandlers(): void {
@@ -953,11 +1029,11 @@ export class GameManager extends Component {
         return buttonNode;
     }
 
-    private addLabel(text: string, x: number, y: number, fontSize: number): Node {
+    private addLabel(text: string, x: number, y: number, fontSize: number, width: number = 760): Node {
         const labelNode = new Node(`${text}Label`);
         this._flowRoot.addChild(labelNode);
         labelNode.setPosition(x, y, 0);
-        labelNode.addComponent(UITransform).setContentSize(760, 52);
+        labelNode.addComponent(UITransform).setContentSize(width, 52);
         const label = labelNode.addComponent(Label);
         label.string = text;
         label.fontSize = fontSize;
