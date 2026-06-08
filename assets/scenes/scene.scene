@@ -321,7 +321,19 @@
     "floorY": 30,
     "serveForceX": 5,
     "serveForceY": 3,
-    "_id": "9fEHrdV9pN24nXrZ7XiwIx"
+    "_id": "9fEHrdV9pN24nXrZ7XiwIx",
+    "kobeSpriteFrame": {
+      "__uuid__": "76a4ea5c-9074-4dfc-925c-2500f7d30cb1@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
+    "caixukunSpriteFrame": {
+      "__uuid__": "cf8a32fb-000d-4a29-850c-86b264d38107@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
+    "nailongSpriteFrame": {
+      "__uuid__": "c852a74c-776a-44b7-84a1-a35bd8b7adde@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    }
   },
   {
     "__type__": "cc.Label",
@@ -1304,7 +1316,10 @@
     },
     "hitRange": 80,
     "playerId": 1,
-    "_id": "daETLVq5dDQbzY/gYBpxLE"
+    "_id": "daETLVq5dDQbzY/gYBpxLE",
+    "jumpKey": 87,
+    "jumpSpeed": 720,
+    "gravity": 1800
   },
   {
     "__type__": "cc.Node",
@@ -1634,7 +1649,10 @@
     },
     "hitRange": 80,
     "playerId": 2,
-    "_id": "28Ng02wAFIYp9otddQe/mM"
+    "_id": "28Ng02wAFIYp9otddQe/mM",
+    "jumpKey": 38,
+    "jumpSpeed": 720,
+    "gravity": 1800
   },
   {
     "__type__": "cc.Node",

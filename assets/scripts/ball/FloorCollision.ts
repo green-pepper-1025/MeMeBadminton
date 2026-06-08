@@ -3,7 +3,6 @@ const { ccclass } = _decorator;
 
 @ccclass('FloorCollision')
 export class FloorCollision extends Component {
-
     private _cooldown: boolean = false;
 
     onLoad() {
@@ -14,7 +13,11 @@ export class FloorCollision extends Component {
         }
     }
 
-    private onBeginContact(selfCollider: Collider2D, otherCollider: Collider2D, contact: IPhysics2DContact | null) {
+    private onBeginContact(
+        selfCollider: Collider2D,
+        otherCollider: Collider2D,
+        contact: IPhysics2DContact | null,
+    ): void {
         console.log('[FloorCollision] 碰撞触发，对方:', otherCollider.node.name);
         if (this._cooldown) return;
         if (otherCollider.node.name === 'Shuttlecock') {
@@ -22,14 +25,16 @@ export class FloorCollision extends Component {
 
             // 用字符串查找组件，避免导入自定义类
             const gm = this.node.scene.getComponentInChildren('GameManager') as any;
-            if (gm && gm.onFloorCollision) {
-                console.log('[FloorCollision] 调用 onFloorCollision');
-                gm.onFloorCollision(otherCollider.node.worldPosition.x);
+            if (gm && gm.onBallLanded) {
+                console.log('[FloorCollision] 调用 onBallLanded');
+                gm.onBallLanded(otherCollider.node.worldPosition.x);
             } else {
                 console.error('[FloorCollision] 未找到 GameManager 组件');
             }
 
-            this.scheduleOnce(() => { this._cooldown = false; }, 1);
+            this.scheduleOnce(() => {
+                this._cooldown = false;
+            }, 1);
         }
     }
 }

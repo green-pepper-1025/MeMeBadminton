@@ -1,7 +1,31 @@
 {
-  "name": "MemeBadminton",
-  "uuid": "4496b378-ef06-44c5-b432-18586a4dbd0b",
-  "creator": {
-    "version": "3.8.8"
-  }
+    "name": "MemeBadminton",
+    "uuid": "4496b378-ef06-44c5-b432-18586a4dbd0b",
+    "creator": {
+        "version": "3.8.8"
+    },
+    "scripts": {
+        "typecheck": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/typecheck.ps1",
+        "lint": "eslint \"assets/scripts/**/*.ts\"",
+        "format": "prettier --write \"assets/scripts/**/*.ts\" \"docs/project-architecture.md\" \"docs/scene-analysis.md\" \"docs/build-guide.md\" \"*.json\"",
+        "format:check": "prettier --check \"assets/scripts/**/*.ts\" \"docs/project-architecture.md\" \"docs/scene-analysis.md\" \"docs/build-guide.md\" \"*.json\"",
+        "build:web-desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/cocos-build.ps1 -Platform web-desktop",
+        "build:web-mobile": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/cocos-build.ps1 -Platform web-mobile",
+        "preview": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/cocos-preview.ps1",
+        "server:lan": "node server/lan-server.js",
+        "logs:latest": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/read-latest-log.ps1",
+        "logs:collect": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/collect-logs.ps1"
+    },
+    "dependencies": {
+        "ws": "^8.18.3"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.29.0",
+        "@typescript-eslint/eslint-plugin": "^8.34.0",
+        "@typescript-eslint/parser": "^8.34.0",
+        "eslint": "^9.29.0",
+        "prettier": "^3.5.3",
+        "typescript": "^5.8.3",
+        "typescript-eslint": "^8.34.0"
+    }
 }
