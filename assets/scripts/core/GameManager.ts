@@ -1,4 +1,17 @@
-import { _decorator, Color, Component, Graphics, Label, Node, RigidBody2D, UITransform, Vec2, Vec3 } from 'cc';
+import {
+    _decorator,
+    Color,
+    Component,
+    Graphics,
+    Label,
+    Node,
+    RigidBody2D,
+    Sprite,
+    SpriteFrame,
+    UITransform,
+    Vec2,
+    Vec3,
+} from 'cc';
 const { ccclass, property } = _decorator;
 
 type GameState = 'waitingServe' | 'playing' | 'roundEnd' | 'matchEnd';
@@ -59,6 +72,15 @@ export class GameManager extends Component {
     public serveForceX: number = 300; // 水平方向
     @property
     public serveForceY: number = 600; // 垂直方向
+
+    @property(SpriteFrame)
+    public kobeSpriteFrame: SpriteFrame = null;
+
+    @property(SpriteFrame)
+    public caixukunSpriteFrame: SpriteFrame = null;
+
+    @property(SpriteFrame)
+    public nailongSpriteFrame: SpriteFrame = null;
 
     private _score1: number = 0;
     private _score2: number = 0;
@@ -417,7 +439,7 @@ export class GameManager extends Component {
         this.clearFlowRoot();
         this.setBattleVisible(true);
         this.resetMatch();
-        this.applyCharacterLabels();
+        this.applyCharacterSprites();
     }
 
     private resetMatch(): void {
@@ -479,7 +501,7 @@ export class GameManager extends Component {
         };
     }
 
-    private applyCharacterLabels(): void {
+    private applyCharacterSprites(): void {
         if (!this._matchSetup) {
             return;
         }
@@ -490,22 +512,17 @@ export class GameManager extends Component {
                 continue;
             }
 
+            playerNode.getChildByName('CharacterName')?.destroy();
+
             const character = this.getCharacter(player.characterId);
-            let nameLabelNode = playerNode.getChildByName('CharacterName');
-            if (!nameLabelNode) {
-                nameLabelNode = new Node('CharacterName');
-                playerNode.addChild(nameLabelNode);
-                nameLabelNode.addComponent(UITransform).setContentSize(160, 30);
-                const label = nameLabelNode.addComponent(Label);
-                label.fontSize = 20;
-                label.color = Color.WHITE;
-                label.horizontalAlign = Label.HorizontalAlign.CENTER;
+            const bodySprite = playerNode.getChildByName('Body')?.getComponent(Sprite);
+            if (!bodySprite) {
+                continue;
             }
 
-            nameLabelNode.setPosition(0, 80, 0);
-            const label = nameLabelNode.getComponent(Label);
-            if (label) {
-                label.string = character.displayName;
+            const spriteFrame = this.getCharacterSpriteFrame(character.characterId);
+            if (spriteFrame) {
+                bodySprite.spriteFrame = spriteFrame;
             }
         }
     }
@@ -558,6 +575,20 @@ export class GameManager extends Component {
 
     private getCharacter(characterId: string): CharacterDefinition {
         return this._characters.find((character) => character.characterId === characterId) ?? this._characters[0];
+    }
+
+    private getCharacterSpriteFrame(characterId: string): SpriteFrame {
+        if (characterId === 'kobe') {
+            return this.kobeSpriteFrame;
+        }
+        if (characterId === 'caixukun') {
+            return this.caixukunSpriteFrame;
+        }
+        if (characterId === 'nailong') {
+            return this.nailongSpriteFrame;
+        }
+
+        return null;
     }
 
     private createRoomId(): string {

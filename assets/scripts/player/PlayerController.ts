@@ -26,6 +26,9 @@ export class PlayerController extends Component {
     @property({ type: Enum(KeyCode) })
     public rightKey: KeyCode = KeyCode.KEY_D;
 
+    @property({ type: Enum(KeyCode) })
+    public jumpKey: KeyCode = KeyCode.KEY_W;
+
     // 挥拍键 —— 上挥和下挥
     @property({ type: Enum(KeyCode) })
     public swingUpKey: KeyCode = KeyCode.KEY_W;
@@ -37,6 +40,12 @@ export class PlayerController extends Component {
     public minX: number = -600;
     @property
     public maxX: number = 600;
+
+    @property
+    public jumpSpeed: number = 720;
+
+    @property
+    public gravity: number = 1800;
 
     // 击球力度
     @property
@@ -80,6 +89,9 @@ export class PlayerController extends Component {
     private _isSwingUp: boolean = false;
     private _isSwingDown: boolean = false;
     private _hitLocked: boolean = false;
+    private _verticalSpeed: number = 0;
+    private _groundY: number = -250;
+    private _isGrounded: boolean = true;
 
     // 引用 GameManager 组件（运行时查找）
     private _gameManager: any = null;
@@ -87,6 +99,7 @@ export class PlayerController extends Component {
     onLoad() {
         input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
         input.on(Input.EventType.KEY_UP, this.onKeyUp, this);
+        this._groundY = this.node.position.y;
 
         // 查找 GameManager，假设挂在 Canvas/GameManager 节点上
         const gmNode = this.node.scene.getChildByName('Canvas')?.getChildByName('GameManager');
@@ -105,6 +118,8 @@ export class PlayerController extends Component {
             this.handleCommand({ playerId: this.playerId, type: CommandType.MOVE_LEFT, timestamp: Date.now() });
         } else if (event.keyCode === this.rightKey) {
             this.handleCommand({ playerId: this.playerId, type: CommandType.MOVE_RIGHT, timestamp: Date.now() });
+        } else if (event.keyCode === this.jumpKey) {
+            this.handleCommand({ playerId: this.playerId, type: CommandType.JUMP, timestamp: Date.now() });
         } else if (event.keyCode === this.swingUpKey) {
             this.handleCommand({ playerId: this.playerId, type: CommandType.SWING_UP, timestamp: Date.now() });
         } else if (event.keyCode === this.swingDownKey) {
@@ -138,6 +153,9 @@ export class PlayerController extends Component {
                 break;
             case CommandType.STOP_MOVE:
                 this._moveDirection = 0;
+                break;
+            case CommandType.JUMP:
+                this.jump();
                 break;
             case CommandType.SWING_UP:
                 this._isSwingUp = true;
@@ -184,6 +202,15 @@ export class PlayerController extends Component {
             .start();
     }
 
+    private jump(): void {
+        if (!this._isGrounded) {
+            return;
+        }
+
+        this._isGrounded = false;
+        this._verticalSpeed = this.jumpSpeed;
+    }
+
     private checkAndHit() {
         // 获取球拍的世界坐标
         const racketWorldPos = this.racketNode.getWorldPosition();
@@ -219,6 +246,19 @@ export class PlayerController extends Component {
             const newX = this.node.position.x + this._moveDirection * this.moveSpeed * deltaTime;
             const clampedX = Math.max(this.minX, Math.min(this.maxX, newX));
             this.node.setPosition(clampedX, this.node.position.y, this.node.position.z);
+        }
+
+        if (!this._isGrounded) {
+            this._verticalSpeed -= this.gravity * deltaTime;
+            const nextY = this.node.position.y + this._verticalSpeed * deltaTime;
+
+            if (nextY <= this._groundY) {
+                this.node.setPosition(this.node.position.x, this._groundY, this.node.position.z);
+                this._verticalSpeed = 0;
+                this._isGrounded = true;
+            } else {
+                this.node.setPosition(this.node.position.x, nextY, this.node.position.z);
+            }
         }
 
         // 挥拍击球检测
