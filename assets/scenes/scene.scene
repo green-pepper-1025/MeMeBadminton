@@ -333,6 +333,14 @@
     "nailongSpriteFrame": {
       "__uuid__": "c852a74c-776a-44b7-84a1-a35bd8b7adde@f9941",
       "__expectedType__": "cc.SpriteFrame"
+    },
+    "startSpriteFrame": {
+      "__uuid__": "56ce8126-a24c-4f48-b7ed-f86734dc867b@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
+    "localCharacterSelectSpriteFrame": {
+      "__uuid__": "7083e4dc-14bf-4401-8321-3f63fe8f2c76@f9941",
+      "__expectedType__": "cc.SpriteFrame"
     }
   },
   {

@@ -87,6 +87,12 @@ export class GameManager extends Component {
     @property(SpriteFrame)
     public nailongSpriteFrame: SpriteFrame = null;
 
+    @property(SpriteFrame)
+    public startSpriteFrame: SpriteFrame = null;
+
+    @property(SpriteFrame)
+    public localCharacterSelectSpriteFrame: SpriteFrame = null;
+
     @property
     public characterBodyWidth: number = 96;
 
@@ -459,10 +465,17 @@ export class GameManager extends Component {
         this.setBattleVisible(false);
         this.clearFlowRoot();
 
+        if (this.startSpriteFrame) {
+            this.addImageBackground('StartBackground', this.startSpriteFrame, 1280, 720);
+            this.addHitAreaButton('LocalBattleButton', -410, -155, 380, 90, () => this.enterLocalCharacterSelect());
+            this.addHitAreaButton('OnlineBattleButton', -410, -258, 380, 90, () => this.enterOnlineRoom());
+            return;
+        }
+
         this.addLabel('抽象羽球大乱斗', 0, 170, 44);
         this.addLabel('Meme Badminton', 0, 115, 26);
-        this.addButton('双人联机', 0, 30, 260, 64, () => this.enterOnlineRoom());
-        this.addButton('本地双人', 0, -55, 260, 64, () => this.enterLocalCharacterSelect());
+        this.addButton('联机对战', 0, 30, 260, 64, () => this.enterOnlineRoom());
+        this.addButton('本地对战', 0, -55, 260, 64, () => this.enterLocalCharacterSelect());
     }
 
     private enterLocalCharacterSelect(): void {
@@ -545,6 +558,11 @@ export class GameManager extends Component {
     }
 
     private renderLocalCharacterSelect(): void {
+        if (this.localCharacterSelectSpriteFrame) {
+            this.addLocalCharacterSelectImageScreen();
+            return;
+        }
+
         this.addLabel('本地双人选角', 0, 220, 38);
         this.addLocalPlayerSelectColumn('player1', -310, 'P1');
         this.addLocalPlayerSelectColumn('player2', 310, 'P2');
@@ -577,6 +595,51 @@ export class GameManager extends Component {
         this.addButton(confirmed ? '已确认' : `确认${title}角色`, x, -95, 230, 54, () =>
             this.confirmCharacter(playerId),
         );
+    }
+
+    private addLocalCharacterSelectImageScreen(): void {
+        this.addImageBackground('LocalCharacterSelectBackground', this.localCharacterSelectSpriteFrame, 1280, 768);
+        this.addLocalCharacterHitAreas('player1', [-500, -326, -176]);
+        this.addLocalCharacterHitAreas('player2', [213, 376, 499]);
+        this.addHitAreaButton('ConfirmP1Button', -326, -146, 310, 82, () => this.confirmCharacter('player1'));
+        this.addHitAreaButton('ConfirmP2Button', 337, -146, 310, 82, () => this.confirmCharacter('player2'));
+        this.addHitAreaButton('BackToMainMenuButton', -6, -290, 330, 82, () => this.enterMainMenu());
+
+        this.addSelectedCharacterFrame('player1', [-500, -326, -176], new Color(64, 180, 255, 255));
+        this.addSelectedCharacterFrame('player2', [213, 376, 499], new Color(205, 92, 255, 255));
+
+        if (this._localCharacterSelect.isConfirmed('player1')) {
+            this.addLabel('P1 已确认', -318, 210, 26, 220);
+        }
+        if (this._localCharacterSelect.isConfirmed('player2')) {
+            this.addLabel('P2 已确认', 343, 210, 26, 220);
+        }
+    }
+
+    private addLocalCharacterHitAreas(playerId: PlayerId, cardXs: number[]): void {
+        this._characters.forEach((character, index) => {
+            this.addHitAreaButton(`${playerId}${character.characterId}Card`, cardXs[index], 86, 145, 205, () =>
+                this.selectCharacter(playerId, character.characterId),
+            );
+        });
+    }
+
+    private addSelectedCharacterFrame(playerId: PlayerId, cardXs: number[], color: Color): void {
+        const selectedCharacterId = this._localCharacterSelect.getSelectedCharacter(playerId);
+        const selectedIndex = this._characters.findIndex((character) => character.characterId === selectedCharacterId);
+        if (selectedIndex < 0) {
+            return;
+        }
+
+        const frameNode = new Node(`${playerId}SelectedFrame`);
+        this._flowRoot.addChild(frameNode);
+        frameNode.setPosition(cardXs[selectedIndex], 86, 0);
+        frameNode.addComponent(UITransform).setContentSize(145, 205);
+        const graphics = frameNode.addComponent(Graphics);
+        graphics.strokeColor = color;
+        graphics.lineWidth = 6;
+        graphics.roundRect(-72.5, -102.5, 145, 205, 8);
+        graphics.stroke();
     }
 
     private selectCharacter(playerId: PlayerId, characterId: string): void {
@@ -1026,6 +1089,34 @@ export class GameManager extends Component {
         label.horizontalAlign = Label.HorizontalAlign.CENTER;
         label.verticalAlign = Label.VerticalAlign.CENTER;
 
+        return buttonNode;
+    }
+
+    private addImageBackground(name: string, spriteFrame: SpriteFrame, width: number, height: number): Node {
+        const backgroundNode = new Node(name);
+        this._flowRoot.addChild(backgroundNode);
+        backgroundNode.setPosition(0, 0, 0);
+        const transform = backgroundNode.addComponent(UITransform);
+        const sprite = backgroundNode.addComponent(Sprite);
+        sprite.spriteFrame = spriteFrame;
+        sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+        transform.setContentSize(width, height);
+        return backgroundNode;
+    }
+
+    private addHitAreaButton(
+        name: string,
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        onClick: () => void,
+    ): Node {
+        const buttonNode = new Node(name);
+        this._flowRoot.addChild(buttonNode);
+        buttonNode.setPosition(x, y, 0);
+        buttonNode.addComponent(UITransform).setContentSize(width, height);
+        buttonNode.on(Node.EventType.TOUCH_END, onClick, this);
         return buttonNode;
     }
 
