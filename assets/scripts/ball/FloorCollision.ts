@@ -3,7 +3,6 @@ const { ccclass } = _decorator;
 
 @ccclass('FloorCollision')
 export class FloorCollision extends Component {
-
     private _cooldown: boolean = false;
 
     onLoad() {
@@ -17,7 +16,7 @@ export class FloorCollision extends Component {
     private onBeginContact(
         selfCollider: Collider2D,
         otherCollider: Collider2D,
-        contact: IPhysics2DContact | null
+        contact: IPhysics2DContact | null,
     ): void {
         console.log('[FloorCollision] 碰撞触发，对方:', otherCollider.node.name);
         if (this._cooldown) return;
@@ -33,7 +32,9 @@ export class FloorCollision extends Component {
                 console.error('[FloorCollision] 未找到 GameManager 组件');
             }
 
-            this.scheduleOnce(() => { this._cooldown = false; }, 1);
+            this.scheduleOnce(() => {
+                this._cooldown = false;
+            }, 1);
         }
     }
 }

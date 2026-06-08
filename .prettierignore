@@ -1,0 +1,7 @@
+build/
+library/
+temp/
+node_modules/
+extensions/cocos-mcp-server/dist/
+extensions/cocos-mcp-server/node_modules/
+logs/

@@ -1,9 +1,27 @@
 {
-  /* Base configuration. Do not edit this field. */
-  "extends": "./temp/tsconfig.cocos.json",
+    /* Base configuration. Do not edit this field. */
+    "extends": "./temp/tsconfig.cocos.json",
 
-  /* Add your custom configuration here. */
-  "compilerOptions": {
-    "strict": false
-  }
+    /* Add your custom configuration here. */
+    "compilerOptions": {
+        "strict": false,
+        "skipLibCheck": true,
+        "lib": ["ES2015", "DOM"],
+        "baseUrl": ".",
+        "paths": {
+            "@assets/*": ["assets/*"],
+            "@scripts/*": ["assets/scripts/*"],
+            "@core/*": ["assets/scripts/core/*"],
+            "@player/*": ["assets/scripts/player/*"],
+            "@ball/*": ["assets/scripts/ball/*"]
+        },
+        "types": [
+            "./temp/declarations/cc.custom-macro",
+            "./temp/declarations/jsb",
+            "./temp/declarations/cc",
+            "./temp/declarations/cc.env"
+        ]
+    },
+    "include": ["assets/scripts/**/*.ts"],
+    "exclude": ["library", "temp/programming", "build", "node_modules", "extensions"]
 }

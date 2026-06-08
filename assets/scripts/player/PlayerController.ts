@@ -1,10 +1,22 @@
-import { _decorator, Component, Node, input, Input, KeyCode, EventKeyboard, Enum, RigidBody2D, Vec2, Vec3, tween } from 'cc';
+import {
+    _decorator,
+    Component,
+    Node,
+    input,
+    Input,
+    KeyCode,
+    EventKeyboard,
+    Enum,
+    RigidBody2D,
+    Vec2,
+    Vec3,
+    tween,
+} from 'cc';
 import { CommandType, PlayerCommand } from '../core/InputRouter';
 const { ccclass, property } = _decorator;
 
 @ccclass('PlayerController')
 export class PlayerController extends Component {
-
     @property
     public moveSpeed: number = 400;
 
@@ -40,13 +52,12 @@ export class PlayerController extends Component {
     @property
     public angleToForceScale: number = 15;
 
-
     @property
-    public swingAngleUp: number = 30;      // 上挥时球拍向上旋转的角度（度）
+    public swingAngleUp: number = 30; // 上挥时球拍向上旋转的角度（度）
     @property
-    public swingAngleDown: number = -30;   // 下挥时向下旋转的角度
+    public swingAngleDown: number = -30; // 下挥时向下旋转的角度
     @property
-    public swingDuration: number = 0.08;   // 挥动持续秒数
+    public swingDuration: number = 0.08; // 挥动持续秒数
     @property
     public swingRecoverDuration: number = 0.12; // 恢复时间
 
@@ -63,7 +74,7 @@ export class PlayerController extends Component {
     public hitRange: number = 80;
 
     @property
-    public playerId: number = 1;   // 1 或 2，在编辑器里给 Player1 设为 1，Player2 设为 2
+    public playerId: number = 1; // 1 或 2，在编辑器里给 Player1 设为 1，Player2 设为 2
 
     private _moveDirection: number = 0;
     private _isSwingUp: boolean = false;
@@ -148,7 +159,7 @@ export class PlayerController extends Component {
         // 1. 先尝试发球（如果处于发球状态）
         if (this._gameManager && this._gameManager.tryServe) {
             const racketWorldPos = this.racketNode.worldPosition;
-            const facingRight = this.playerId === 1;  // P1 朝右，P2 朝左
+            const facingRight = this.playerId === 1; // P1 朝右，P2 朝左
             this._gameManager.tryServe(this.playerId, racketWorldPos, facingRight);
         }
 
@@ -184,7 +195,7 @@ export class PlayerController extends Component {
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist < this.hitRange) {
-            const ballBody = this.shuttlecockNode.getComponent(RigidBody2D) ;
+            const ballBody = this.shuttlecockNode.getComponent(RigidBody2D);
             if (ballBody) {
                 if (this._hitLocked) {
                     return;

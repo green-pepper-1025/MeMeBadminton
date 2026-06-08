@@ -3,7 +3,6 @@ const { ccclass, property } = _decorator;
 
 @ccclass('RacketHit')
 export class RacketHit extends Component {
-
     // 击球向上的力度
     @property
     public hitForceY: number = 800;
