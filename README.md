@@ -38,9 +38,13 @@ assets/scripts/         TypeScript 游戏逻辑
 assets/scripts/core/    核心流程和输入路由
 assets/scripts/player/  玩家控制和球拍击球逻辑
 assets/scripts/ball/    球体和落地碰撞逻辑
+assets/scripts/skill/   角色技能系统
+assets/scripts/net/     网络通信模块
 docs/                   设计文档和开发规范
 docs/specs/             当前 coding 的主要规格依据
 extensions/             Cocos Creator 扩展插件
+server/                 LAN 联机服务端（房间管理、中继）
+tests/                  单元测试
 profiles/               构建配置
 settings/               项目设置
 library/                Cocos 生成目录，不提交 Git
@@ -55,6 +59,19 @@ temp/                   Cocos 临时目录，不提交 Git
 4. 在编辑器中运行预览。
 
 > 当前 `package.json` 主要保存 Cocos 项目信息，项目暂未配置 npm 脚本。
+
+## 测试
+
+项目使用 Vitest 进行单元测试，配置见 `tsconfig.tests.json`。
+
+```bash
+npm run test
+```
+
+测试覆盖模块：
+
+- `tests/lan-room.test.ts` — LAN 房间创建、加入和状态管理
+- `tests/skill-system.test.ts` — 技能系统触发与执行逻辑
 
 ## 开发规范
 
@@ -84,6 +101,8 @@ temp/                   Cocos 临时目录，不提交 Git
 - 玩家输入、移动、跳跃和击球行为符合预期。
 - 羽毛球落地和判分逻辑正确。
 - UI Label、Sprite 和动画显示正常。
+- 技能系统触发和执行效果符合预期。
+- LAN 联机房间创建、加入和中继消息正常。
 
 ## Git 提交规范
 
