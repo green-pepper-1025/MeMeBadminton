@@ -19,6 +19,7 @@ export enum CommandType {
     SWING_DOWN = 'swing_down',
     JUMP = 'jump',
     STOP_MOVE = 'stop_move',
+    USE_SKILL = 'use_skill',
 }
 
 /**
@@ -62,12 +63,14 @@ export class InputRouter extends Component {
         this.keyMap.set(KeyCode.KEY_S, { playerId: PlayerID.PLAYER_1, type: CommandType.SWING_DOWN });
         this.keyMap.set(KeyCode.KEY_A, { playerId: PlayerID.PLAYER_1, type: CommandType.MOVE_LEFT });
         this.keyMap.set(KeyCode.KEY_D, { playerId: PlayerID.PLAYER_1, type: CommandType.MOVE_RIGHT });
+        this.keyMap.set(KeyCode.SPACE, { playerId: PlayerID.PLAYER_1, type: CommandType.USE_SKILL });
 
         // 玩家2：方向键
         this.keyMap.set(KeyCode.ARROW_UP, { playerId: PlayerID.PLAYER_2, type: CommandType.JUMP });
         this.keyMap.set(KeyCode.ARROW_DOWN, { playerId: PlayerID.PLAYER_2, type: CommandType.SWING_DOWN });
         this.keyMap.set(KeyCode.ARROW_LEFT, { playerId: PlayerID.PLAYER_2, type: CommandType.MOVE_LEFT });
         this.keyMap.set(KeyCode.ARROW_RIGHT, { playerId: PlayerID.PLAYER_2, type: CommandType.MOVE_RIGHT });
+        this.keyMap.set(KeyCode.ENTER, { playerId: PlayerID.PLAYER_2, type: CommandType.USE_SKILL });
     }
 
     /**

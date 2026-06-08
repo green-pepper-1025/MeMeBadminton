@@ -12,6 +12,10 @@ import {
     Vec2,
     Vec3,
 } from 'cc';
+import { PlayerCommand } from './InputRouter';
+import { NetworkClient, BallStatePayload, RoomSnapshot, ScoreUpdatePayload } from '../net/NetworkClient';
+import { SkillExecutor } from '../skill/SkillExecutor';
+import { SkillPlayerId, SkillSystem } from '../skill/SkillSystem';
 const { ccclass, property } = _decorator;
 
 type GameState = 'waitingServe' | 'playing' | 'roundEnd' | 'matchEnd';
@@ -103,6 +107,17 @@ export class GameManager extends Component {
     private _roomId: string = 'ABCD';
     private _matchSetup: MatchSetup = null;
     private _lastResult: MatchResult = null;
+    private _localPlayerId: PlayerId = 'player1';
+    private _isHost: boolean = true;
+    private _serverUrl: string = 'ws://localhost:8787';
+    private _connectionStatus: string = '未连接';
+    private _roomSnapshot: RoomSnapshot = null;
+    private _pendingBallState: BallStatePayload = null;
+    private _ballSyncElapsed: number = 0;
+    private readonly _ballSyncInterval: number = 1 / 15;
+    private readonly _network: NetworkClient = NetworkClient.getInstance();
+    private readonly _skillSystem: SkillSystem = new SkillSystem();
+    private readonly _skillExecutor: SkillExecutor = new SkillExecutor();
     private _selectedCharacters: Record<PlayerId, string> = {
         player1: 'kobe',
         player2: 'caixukun',
@@ -146,11 +161,22 @@ export class GameManager extends Component {
 
         this.collectBattleNodes();
         this.createFlowRoot();
+        this.registerNetworkHandlers();
         this.enterMainMenu();
+    }
+
+    onDestroy(): void {
+        this.unregisterNetworkHandlers();
     }
 
     // 供外部调用：得分后进入发球状态
     private addScoreAndServe(winner: 1 | 2): void {
+        if (!this.canApplyBallPhysics()) {
+            return;
+        }
+
+        this._skillExecutor.clearEffects();
+
         if (winner === 1) {
             this._score1++;
         } else {
@@ -164,14 +190,20 @@ export class GameManager extends Component {
 
         if (this._score1 >= this.pointsToWinRound || this._score2 >= this.pointsToWinRound) {
             this.endRound(winner);
+            this.broadcastScoreUpdate(winner);
             return;
         }
 
         this._gameState = 'waitingServe';
+        this.broadcastScoreUpdate(winner);
     }
 
     // 发球：由 PlayerController 调用
     public tryServe(playerId: number, racketWorldPos: Vec3, facingRight: boolean): void {
+        if (!this.canApplyBallPhysics()) {
+            return;
+        }
+
         // 只有处于等待发球状态，且是该玩家发球，才能执行
         if (this._gameState !== 'waitingServe' || playerId !== this._currentServer) {
             return;
@@ -199,9 +231,14 @@ export class GameManager extends Component {
 
         // 进入比赛状态
         this._gameState = 'playing';
+        this.broadcastBallState();
     }
 
     public onBallLanded(ballX: number): void {
+        if (!this.canApplyBallPhysics()) {
+            return;
+        }
+
         if (this._gameState !== 'playing') {
             return;
         }
@@ -213,6 +250,64 @@ export class GameManager extends Component {
         console.log(`[落点] X: ${ballX}, 分界: ${dividerX}, 判定: ${winner === 2 ? '左半场 P2得分' : '右半场 P1得分'}`);
 
         this.addScoreAndServe(winner as 1 | 2);
+    }
+
+    public onPlayerHitBall(playerId: number): void {
+        if (!this.canApplyBallPhysics()) {
+            return;
+        }
+
+        if (this._gameState !== 'playing') {
+            return;
+        }
+
+        this._skillSystem.addHitCharge(this.toSkillPlayerId(playerId));
+        this.updateScoreLabels();
+    }
+
+    public tryUseSkill(playerId: number): boolean {
+        if (!this.canApplyBallPhysics()) {
+            return false;
+        }
+
+        if (this._gameState !== 'playing') {
+            return false;
+        }
+
+        const skillPlayerId = this.toSkillPlayerId(playerId);
+        const playerNode = skillPlayerId === 'player1' ? this._player1Node : this._player2Node;
+        let state = null;
+
+        try {
+            state = this._skillSystem.getState(skillPlayerId);
+        } catch {
+            return false;
+        }
+
+        if (!state.isReady || state.usesRemaining <= 0) {
+            return false;
+        }
+
+        const effectApplied = this._skillExecutor.execute(state.skillId, skillPlayerId, playerNode, this.shuttlecock);
+        if (!effectApplied) {
+            return false;
+        }
+
+        const result = this._skillSystem.tryUseSkill(skillPlayerId);
+        this.updateScoreLabels();
+        return result.success;
+    }
+
+    public canApplyBallPhysics(): boolean {
+        return this._battleMode !== 'online' || this._isHost;
+    }
+
+    public onLocalPlayerCommand(command: PlayerCommand): void {
+        if (this._battleMode !== 'online' || !this._network.isConnected) {
+            return;
+        }
+
+        this._network.sendPlayerInput(command);
     }
 
     private endRound(winner: 1 | 2): void {
@@ -238,6 +333,8 @@ export class GameManager extends Component {
         this._gameState = 'roundEnd';
         this._score1 = 0;
         this._score2 = 0;
+        this._skillExecutor.clearEffects();
+        this._skillSystem.resetRound();
         this.updateScoreLabels();
         this._gameState = 'waitingServe';
     }
@@ -258,15 +355,37 @@ export class GameManager extends Component {
 
     private updateScoreLabels(): void {
         if (this.score1Label) {
-            this.score1Label.string = `P1 ${this._score1} (${this._roundsWon1})`;
+            this.score1Label.string = `P1 ${this._score1} (${this._roundsWon1})\n${this.getSkillStatusText('player1')}`;
         }
         if (this.score2Label) {
-            this.score2Label.string = `P2 ${this._score2} (${this._roundsWon2})`;
+            this.score2Label.string = `P2 ${this._score2} (${this._roundsWon2})\n${this.getSkillStatusText('player2')}`;
         }
     }
 
-    update(_deltaTime: number): void {
+    update(deltaTime: number): void {
+        if (this._appState === 'battle' && this._gameState === 'playing') {
+            this._skillSystem.update(deltaTime);
+            this._skillExecutor.update(deltaTime, this.shuttlecock);
+            this.updateScoreLabels();
+        }
+
+        if (this._appState === 'battle' && this._battleMode === 'online') {
+            if (this._isHost) {
+                this._ballSyncElapsed += deltaTime;
+                if (this._ballSyncElapsed >= this._ballSyncInterval) {
+                    this._ballSyncElapsed = 0;
+                    this.broadcastBallState();
+                }
+            } else {
+                this.smoothRemoteBall(deltaTime);
+            }
+        }
+
         if (this._gameState !== 'playing' || !this.shuttlecock || !this.shuttlecock.active) {
+            return;
+        }
+
+        if (!this.canApplyBallPhysics()) {
             return;
         }
 
@@ -341,23 +460,28 @@ export class GameManager extends Component {
     private enterOnlineRoom(): void {
         this._appState = 'online_room';
         this._battleMode = 'online';
-        this._roomId = this.createRoomId();
+        this._roomId = this._roomId === 'ABCD' ? 'LAN1' : this._roomId;
         this.clearFlowRoot();
         this.setBattleVisible(false);
 
         this.addLabel('双人联机', 0, 180, 38);
-        this.addLabel(`房间号: ${this._roomId}`, 0, 115, 26);
-        this.addLabel('P1: 已加入', 0, 55, 24);
-        this.addLabel('P2: 等待中...', 0, 15, 24);
-        this.addButton('模拟第二名玩家加入', 0, -70, 330, 58, () => this.enterCharacterSelect());
-        this.addButton('取消', 0, -145, 180, 52, () => this.enterMainMenu(), new Color(78, 84, 96, 255));
+        this.addLabel(`服务器: ${this._serverUrl}`, 0, 120, 22);
+        this.addLabel(`状态: ${this._connectionStatus}`, 0, 78, 22);
+        this.addLabel(`房间号: ${this._roomId}`, 0, 36, 24);
+
+        const p1 = this._roomSnapshot?.players.find((player) => player.playerId === 'player1');
+        const p2 = this._roomSnapshot?.players.find((player) => player.playerId === 'player2');
+        this.addLabel(`P1: ${p1?.connected ? '已加入' : '等待中'} ${p1?.isReady ? '/ 已准备' : ''}`, 0, -12, 22);
+        this.addLabel(`P2: ${p2?.connected ? '已加入' : '等待中'} ${p2?.isReady ? '/ 已准备' : ''}`, 0, -50, 22);
+
+        this.addButton('修改地址', -170, -115, 220, 52, () => this.editServerAddress(), new Color(78, 84, 96, 255));
+        this.addButton('连接房间', 110, -115, 220, 52, () => this.connectOnlineRoom());
+        this.addButton('取消', 0, -190, 180, 52, () => this.enterMainMenu(), new Color(78, 84, 96, 255));
     }
 
     private enterCharacterSelect(): void {
         this._appState = 'character_select';
         this._battleMode = 'online';
-        this._confirmedPlayers.player1 = false;
-        this._confirmedPlayers.player2 = false;
         this.clearFlowRoot();
         this.renderCharacterSelect();
     }
@@ -368,30 +492,33 @@ export class GameManager extends Component {
 
         this.addLabel('选择角色', 0, 205, 38);
 
+        const localPlayerId = this._battleMode === 'online' ? this._localPlayerId : 'player1';
+        const remotePlayerId = localPlayerId === 'player1' ? 'player2' : 'player1';
+
         this._characters.forEach((character, index) => {
             this.addButton(character.displayName, -260 + index * 260, 120, 210, 58, () =>
-                this.selectCharacter('player1', character.characterId),
+                this.selectCharacter(localPlayerId, character.characterId),
             );
         });
 
-        const p1Character = this.getCharacter(this._selectedCharacters.player1);
-        const p2Character = this.getCharacter(this._selectedCharacters.player2);
+        const localCharacter = this.getCharacter(this._selectedCharacters[localPlayerId]);
+        const remoteCharacter = this.getCharacter(this._selectedCharacters[remotePlayerId]);
         this.addLabel(
-            `我方: ${p1Character.displayName} / ${this._confirmedPlayers.player1 ? '已确认' : '未确认'}`,
+            `我方(${localPlayerId === 'player1' ? 'P1' : 'P2'}): ${localCharacter.displayName} / ${this._confirmedPlayers[localPlayerId] ? '已确认' : '未确认'}`,
             0,
             35,
             24,
         );
-        this.addLabel(`技能: ${p1Character.description}`, 0, 0, 22);
+        this.addLabel(`技能: ${localCharacter.description}`, 0, 0, 22);
         this.addLabel(
-            `对方: ${p2Character.displayName} / ${this._confirmedPlayers.player2 ? '已确认' : '选择中'}`,
+            `对方(${remotePlayerId === 'player1' ? 'P1' : 'P2'}): ${remoteCharacter.displayName} / ${this._confirmedPlayers[remotePlayerId] ? '已确认' : '选择中'}`,
             0,
             -42,
             22,
         );
 
-        this.addButton('确认我方角色', -150, -125, 230, 58, () => this.confirmCharacter('player1'));
-        this.addButton('模拟对方确认', 150, -125, 230, 58, () => this.confirmCharacter('player2'));
+        this.addButton('确认我方角色', -150, -125, 230, 58, () => this.confirmCharacter(localPlayerId));
+        this.addButton('刷新房间', 150, -125, 230, 58, () => this.renderCharacterSelect(), new Color(78, 84, 96, 255));
         this.addButton('返回房间', 0, -200, 180, 46, () => this.enterOnlineRoom(), new Color(78, 84, 96, 255));
     }
 
@@ -401,16 +528,26 @@ export class GameManager extends Component {
         }
 
         this._selectedCharacters[playerId] = characterId;
-        if (playerId === 'player1') {
+        if (this._battleMode === 'local' && playerId === 'player1') {
             const opponentIndex =
                 (this._characters.findIndex((item) => item.characterId === characterId) + 1) % this._characters.length;
             this._selectedCharacters.player2 = this._characters[opponentIndex].characterId;
+        }
+
+        if (this._battleMode === 'online') {
+            this._network.selectCharacter(characterId);
         }
         this.renderCharacterSelect();
     }
 
     private confirmCharacter(playerId: PlayerId): void {
         this._confirmedPlayers[playerId] = true;
+
+        if (this._battleMode === 'online') {
+            this._network.setReady(true);
+            this.renderCharacterSelect();
+            return;
+        }
 
         if (this._confirmedPlayers.player1 && this._confirmedPlayers.player2) {
             this.createMatchSetup();
@@ -438,8 +575,10 @@ export class GameManager extends Component {
 
         this.clearFlowRoot();
         this.setBattleVisible(true);
+        this.initializeSkills();
         this.resetMatch();
         this.applyCharacterSprites();
+        this.configurePlayerControl();
     }
 
     private resetMatch(): void {
@@ -449,6 +588,8 @@ export class GameManager extends Component {
         this._roundsWon2 = 0;
         this._currentServer = 1;
         this._gameState = 'waitingServe';
+        this._skillExecutor.clearEffects();
+        this._skillSystem.resetRound();
         this.resetBall();
         this.updateScoreLabels();
 
@@ -483,7 +624,7 @@ export class GameManager extends Component {
     private createMatchSetup(): void {
         this._matchSetup = {
             roomId: this._roomId,
-            localPlayerId: 'player1',
+            localPlayerId: this._localPlayerId,
             players: [
                 {
                     playerId: 'player1',
@@ -499,6 +640,59 @@ export class GameManager extends Component {
                 },
             ],
         };
+    }
+
+    private createMatchSetupFromSnapshot(snapshot: RoomSnapshot): void {
+        this._matchSetup = {
+            roomId: snapshot.roomId,
+            localPlayerId: this._localPlayerId,
+            players: [
+                {
+                    playerId: 'player1',
+                    displayName: 'P1',
+                    characterId:
+                        snapshot.players.find((player) => player.playerId === 'player1')?.characterId ??
+                        this._selectedCharacters.player1,
+                    isReady: snapshot.players.find((player) => player.playerId === 'player1')?.isReady ?? false,
+                },
+                {
+                    playerId: 'player2',
+                    displayName: 'P2',
+                    characterId:
+                        snapshot.players.find((player) => player.playerId === 'player2')?.characterId ??
+                        this._selectedCharacters.player2,
+                    isReady: snapshot.players.find((player) => player.playerId === 'player2')?.isReady ?? false,
+                },
+            ],
+        };
+    }
+
+    private configurePlayerControl(): void {
+        const p1Controller = this._player1Node?.getComponent('PlayerController') as any;
+        const p2Controller = this._player2Node?.getComponent('PlayerController') as any;
+
+        if (this._battleMode === 'local') {
+            if (p1Controller) p1Controller.isLocalControlled = true;
+            if (p2Controller) p2Controller.isLocalControlled = true;
+            this._localPlayerId = 'player1';
+            this._isHost = true;
+            return;
+        }
+
+        if (p1Controller) p1Controller.isLocalControlled = this._localPlayerId === 'player1';
+        if (p2Controller) p2Controller.isLocalControlled = this._localPlayerId === 'player2';
+        this._isHost = this._localPlayerId === 'player1';
+    }
+
+    private initializeSkills(): void {
+        if (!this._matchSetup) {
+            return;
+        }
+
+        for (const player of this._matchSetup.players) {
+            const character = this.getCharacter(player.characterId);
+            this._skillSystem.initializePlayer(player.playerId, character.skillId);
+        }
     }
 
     private applyCharacterSprites(): void {
@@ -524,6 +718,206 @@ export class GameManager extends Component {
             if (spriteFrame) {
                 bodySprite.spriteFrame = spriteFrame;
             }
+        }
+    }
+
+    private registerNetworkHandlers(): void {
+        this._network.on('CONNECTED', this.onNetworkConnected);
+        this._network.on('ROOM_SNAPSHOT', this.onRoomSnapshot);
+        this._network.on('MATCH_START', this.onMatchStart);
+        this._network.on('PLAYER_INPUT', this.onRemotePlayerInput);
+        this._network.on('BALL_STATE', this.onRemoteBallState);
+        this._network.on('SCORE_UPDATE', this.onRemoteScoreUpdate);
+        this._network.on('PLAYER_DISCONNECTED', this.onNetworkDisconnected);
+        this._network.on('ERROR', this.onNetworkError);
+    }
+
+    private unregisterNetworkHandlers(): void {
+        this._network.off('CONNECTED', this.onNetworkConnected);
+        this._network.off('ROOM_SNAPSHOT', this.onRoomSnapshot);
+        this._network.off('MATCH_START', this.onMatchStart);
+        this._network.off('PLAYER_INPUT', this.onRemotePlayerInput);
+        this._network.off('BALL_STATE', this.onRemoteBallState);
+        this._network.off('SCORE_UPDATE', this.onRemoteScoreUpdate);
+        this._network.off('PLAYER_DISCONNECTED', this.onNetworkDisconnected);
+        this._network.off('ERROR', this.onNetworkError);
+    }
+
+    private onNetworkConnected = (): void => {
+        this._connectionStatus = this._network.isConnected ? '已连接' : '连接中...';
+        if (this._network.isConnected) {
+            this._network.joinRoom(this._roomId);
+        }
+        if (this._appState === 'online_room') {
+            this.enterOnlineRoom();
+        }
+    };
+
+    private onNetworkDisconnected = (): void => {
+        this._connectionStatus = '已断开';
+        if (this._battleMode === 'online' && this._appState === 'battle') {
+            this.enterOnlineRoom();
+        } else if (this._appState === 'online_room') {
+            this.enterOnlineRoom();
+        }
+    };
+
+    private onNetworkError = (data: any): void => {
+        this._connectionStatus = `错误: ${data?.message ?? '连接失败'}`;
+        if (this._appState === 'online_room') {
+            this.enterOnlineRoom();
+        }
+    };
+
+    private onRoomSnapshot = (snapshot: RoomSnapshot): void => {
+        this._roomSnapshot = snapshot;
+        this._roomId = snapshot.roomId;
+        if (snapshot.localPlayerId) {
+            this._localPlayerId = snapshot.localPlayerId;
+            this._isHost = this._localPlayerId === snapshot.hostPlayerId;
+        }
+
+        for (const player of snapshot.players) {
+            this._selectedCharacters[player.playerId] = player.characterId;
+            this._confirmedPlayers[player.playerId] = player.isReady;
+        }
+
+        if (this._appState === 'online_room' && snapshot.players.length >= 2) {
+            this.enterCharacterSelect();
+            return;
+        }
+
+        if (this._appState === 'online_room') {
+            this.enterOnlineRoom();
+        } else if (this._appState === 'character_select') {
+            this.renderCharacterSelect();
+        }
+    };
+
+    private onMatchStart = (snapshot: RoomSnapshot): void => {
+        this._roomSnapshot = snapshot;
+        this.createMatchSetupFromSnapshot(snapshot);
+        this.startBattle('online');
+    };
+
+    private onRemotePlayerInput = (data: any): void => {
+        const command = data?.command as PlayerCommand;
+        if (!command) {
+            return;
+        }
+
+        const targetNode = command.playerId === 1 ? this._player1Node : this._player2Node;
+        const controller = targetNode?.getComponent('PlayerController') as any;
+        controller?.handleCommand?.(command);
+    };
+
+    private onRemoteBallState = (payload: BallStatePayload): void => {
+        if (this._isHost) {
+            return;
+        }
+
+        this._pendingBallState = payload;
+        this._currentServer = payload.currentServer;
+        this._gameState = payload.gameState as GameState;
+    };
+
+    private onRemoteScoreUpdate = (payload: ScoreUpdatePayload): void => {
+        if (this._isHost) {
+            return;
+        }
+
+        this._score1 = payload.score1;
+        this._score2 = payload.score2;
+        this._roundsWon1 = payload.roundsWon1;
+        this._roundsWon2 = payload.roundsWon2;
+        this._currentServer = payload.currentServer;
+        this._gameState = payload.gameState as GameState;
+        this.updateScoreLabels();
+        if (payload.gameState !== 'playing') {
+            this.resetBall();
+        }
+    };
+
+    private editServerAddress(): void {
+        const nextUrl = window.prompt('输入 WebSocket 服务器地址', this._serverUrl);
+        if (!nextUrl) {
+            return;
+        }
+
+        this._serverUrl = nextUrl;
+        this.enterOnlineRoom();
+    }
+
+    private connectOnlineRoom(): void {
+        this._connectionStatus = '连接中...';
+        this.enterOnlineRoom();
+        this._network.connect(this._serverUrl);
+    }
+
+    private broadcastBallState(): void {
+        if (this._battleMode !== 'online' || !this._isHost || !this._network.isConnected || !this.shuttlecock) {
+            return;
+        }
+
+        const body = this.shuttlecock.getComponent(RigidBody2D);
+        this._network.sendBallState({
+            position: {
+                x: this.shuttlecock.worldPosition.x,
+                y: this.shuttlecock.worldPosition.y,
+                z: this.shuttlecock.worldPosition.z,
+            },
+            velocity: {
+                x: body?.linearVelocity.x ?? 0,
+                y: body?.linearVelocity.y ?? 0,
+            },
+            active: this.shuttlecock.active,
+            currentServer: this._currentServer,
+            gameState: this._gameState,
+        });
+    }
+
+    private broadcastScoreUpdate(winner: 1 | 2): void {
+        if (this._battleMode !== 'online' || !this._isHost || !this._network.isConnected) {
+            return;
+        }
+
+        this._network.sendScoreUpdate({
+            score1: this._score1,
+            score2: this._score2,
+            roundsWon1: this._roundsWon1,
+            roundsWon2: this._roundsWon2,
+            currentServer: this._currentServer,
+            gameState: this._gameState,
+            winnerPlayerId: winner === 1 ? 'player1' : 'player2',
+        });
+    }
+
+    private smoothRemoteBall(deltaTime: number): void {
+        if (!this._pendingBallState || !this.shuttlecock) {
+            return;
+        }
+
+        this.shuttlecock.active = this._pendingBallState.active;
+        if (!this.shuttlecock.active) {
+            return;
+        }
+
+        const current = this.shuttlecock.worldPosition;
+        const target = new Vec3(
+            this._pendingBallState.position.x,
+            this._pendingBallState.position.y,
+            this._pendingBallState.position.z,
+        );
+        const distance = Vec3.distance(current, target);
+        const correction = distance > 120 ? 1 : Math.min(1, deltaTime * 12);
+        const next = new Vec3();
+        Vec3.lerp(next, current, target, correction);
+        this.shuttlecock.setWorldPosition(next);
+
+        const body = this.shuttlecock.getComponent(RigidBody2D);
+        if (body) {
+            body.linearVelocity = new Vec2(this._pendingBallState.velocity.x, this._pendingBallState.velocity.y);
+            body.angularVelocity = 0;
         }
     }
 
@@ -589,6 +983,20 @@ export class GameManager extends Component {
         }
 
         return null;
+    }
+
+    private toSkillPlayerId(playerId: number): SkillPlayerId {
+        return playerId === 1 ? 'player1' : 'player2';
+    }
+
+    private getSkillStatusText(playerId: SkillPlayerId): string {
+        try {
+            const state = this._skillSystem.getState(playerId);
+            const readyText = state.isReady ? 'READY' : `${Math.floor(state.charge)}%`;
+            return `技能 ${readyText} x${state.usesRemaining}`;
+        } catch {
+            return '技能 --';
+        }
     }
 
     private createRoomId(): string {

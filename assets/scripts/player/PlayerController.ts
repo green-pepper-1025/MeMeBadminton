@@ -36,6 +36,9 @@ export class PlayerController extends Component {
     @property({ type: Enum(KeyCode) })
     public swingDownKey: KeyCode = KeyCode.KEY_S;
 
+    @property({ type: Enum(KeyCode) })
+    public skillKey: KeyCode = KeyCode.SPACE;
+
     @property
     public minX: number = -600;
     @property
@@ -85,6 +88,9 @@ export class PlayerController extends Component {
     @property
     public playerId: number = 1; // 1 或 2，在编辑器里给 Player1 设为 1，Player2 设为 2
 
+    @property
+    public isLocalControlled: boolean = true;
+
     private _moveDirection: number = 0;
     private _isSwingUp: boolean = false;
     private _isSwingDown: boolean = false;
@@ -106,6 +112,10 @@ export class PlayerController extends Component {
         if (gmNode) {
             this._gameManager = gmNode.getComponent('GameManager');
         }
+
+        if (this.playerId === 2 && this.skillKey === KeyCode.SPACE) {
+            this.skillKey = KeyCode.ENTER;
+        }
     }
 
     onDestroy() {
@@ -114,22 +124,40 @@ export class PlayerController extends Component {
     }
 
     private onKeyDown(event: EventKeyboard) {
+        if (!this.isLocalControlled) {
+            return;
+        }
+
+        let command: PlayerCommand = null;
         if (event.keyCode === this.leftKey) {
-            this.handleCommand({ playerId: this.playerId, type: CommandType.MOVE_LEFT, timestamp: Date.now() });
+            command = { playerId: this.playerId, type: CommandType.MOVE_LEFT, timestamp: Date.now() };
         } else if (event.keyCode === this.rightKey) {
-            this.handleCommand({ playerId: this.playerId, type: CommandType.MOVE_RIGHT, timestamp: Date.now() });
+            command = { playerId: this.playerId, type: CommandType.MOVE_RIGHT, timestamp: Date.now() };
         } else if (event.keyCode === this.jumpKey) {
-            this.handleCommand({ playerId: this.playerId, type: CommandType.JUMP, timestamp: Date.now() });
+            command = { playerId: this.playerId, type: CommandType.JUMP, timestamp: Date.now() };
         } else if (event.keyCode === this.swingUpKey) {
-            this.handleCommand({ playerId: this.playerId, type: CommandType.SWING_UP, timestamp: Date.now() });
+            command = { playerId: this.playerId, type: CommandType.SWING_UP, timestamp: Date.now() };
         } else if (event.keyCode === this.swingDownKey) {
-            this.handleCommand({ playerId: this.playerId, type: CommandType.SWING_DOWN, timestamp: Date.now() });
+            command = { playerId: this.playerId, type: CommandType.SWING_DOWN, timestamp: Date.now() };
+        } else if (event.keyCode === this.skillKey) {
+            command = { playerId: this.playerId, type: CommandType.USE_SKILL, timestamp: Date.now() };
+        }
+
+        if (command) {
+            this.handleCommand(command);
+            this._gameManager?.onLocalPlayerCommand?.(command);
         }
     }
 
     private onKeyUp(event: EventKeyboard) {
+        if (!this.isLocalControlled) {
+            return;
+        }
+
         if (event.keyCode === this.leftKey || event.keyCode === this.rightKey) {
-            this.handleCommand({ playerId: this.playerId, type: CommandType.STOP_MOVE, timestamp: Date.now() });
+            const command: PlayerCommand = { playerId: this.playerId, type: CommandType.STOP_MOVE, timestamp: Date.now() };
+            this.handleCommand(command);
+            this._gameManager?.onLocalPlayerCommand?.(command);
         } else if (event.keyCode === this.swingUpKey) {
             this._isSwingUp = false;
             this._hitLocked = false;
@@ -167,6 +195,9 @@ export class PlayerController extends Component {
                 this.playSwingAnimation(false);
                 this.onSwing();
                 break;
+            case CommandType.USE_SKILL:
+                this.useSkill();
+                break;
         }
     }
 
@@ -184,6 +215,12 @@ export class PlayerController extends Component {
         // 2. 如果球已经在场上，进行正常击球检测
         if (this.shuttlecockNode && this.shuttlecockNode.active) {
             this.checkAndHit();
+        }
+    }
+
+    private useSkill(): void {
+        if (this._gameManager && this._gameManager.tryUseSkill) {
+            this._gameManager.tryUseSkill(this.playerId);
         }
     }
 
@@ -211,7 +248,7 @@ export class PlayerController extends Component {
         this._verticalSpeed = this.jumpSpeed;
     }
 
-    private checkAndHit() {
+    private checkAndHit(): boolean {
         // 获取球拍的世界坐标
         const racketWorldPos = this.racketNode.getWorldPosition();
         const ballWorldPos = this.shuttlecockNode.getWorldPosition();
@@ -224,6 +261,10 @@ export class PlayerController extends Component {
         if (dist < this.hitRange) {
             const ballBody = this.shuttlecockNode.getComponent(RigidBody2D);
             if (ballBody) {
+                if (this._gameManager?.canApplyBallPhysics && !this._gameManager.canApplyBallPhysics()) {
+                    return false;
+                }
+
                 if (this._hitLocked) {
                     return;
                 }
@@ -236,8 +277,14 @@ export class PlayerController extends Component {
                 ballBody.applyLinearImpulseToCenter(impulse, true);
                 // 防止一帧内多次击打（松开键前只打一次，可通过添加冷却，这里简单置位）
                 this._hitLocked = true;
+                if (this._gameManager && this._gameManager.onPlayerHitBall) {
+                    this._gameManager.onPlayerHitBall(this.playerId);
+                }
+                return true;
             }
         }
+
+        return false;
     }
 
     update(deltaTime: number) {

@@ -12,8 +12,12 @@
         "build:web-desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/cocos-build.ps1 -Platform web-desktop",
         "build:web-mobile": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/cocos-build.ps1 -Platform web-mobile",
         "preview": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/cocos-preview.ps1",
+        "server:lan": "node server/lan-server.js",
         "logs:latest": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/read-latest-log.ps1",
         "logs:collect": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/collect-logs.ps1"
+    },
+    "dependencies": {
+        "ws": "^8.18.3"
     },
     "devDependencies": {
         "@eslint/js": "^9.29.0",
