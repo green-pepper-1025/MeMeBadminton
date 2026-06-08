@@ -17,38 +17,21 @@ const { ccclass, property } = _decorator;
 
 @ccclass('PlayerController')
 export class PlayerController extends Component {
-    @property
-    public moveSpeed: number = 400;
+    @property public moveSpeed: number = 400;
+    @property({ type: Enum(KeyCode) }) public leftKey: KeyCode = KeyCode.KEY_A;
+    @property({ type: Enum(KeyCode) }) public rightKey: KeyCode = KeyCode.KEY_D;
+    @property({ type: Enum(KeyCode) }) public jumpKey: KeyCode = KeyCode.KEY_W;
+    @property({ type: Enum(KeyCode) }) public swingUpKey: KeyCode = KeyCode.KEY_W;
+    @property({ type: Enum(KeyCode) }) public swingDownKey: KeyCode = KeyCode.KEY_S;
+    @property({ type: Enum(KeyCode) }) public skillKey: KeyCode = KeyCode.SPACE;
 
-    @property({ type: Enum(KeyCode) })
-    public leftKey: KeyCode = KeyCode.KEY_A;
+    @property public minX: number = -600;
+    @property public maxX: number = 600;
 
-    @property({ type: Enum(KeyCode) })
-    public rightKey: KeyCode = KeyCode.KEY_D;
-
-    @property({ type: Enum(KeyCode) })
-    public jumpKey: KeyCode = KeyCode.KEY_W;
-
-    // 挥拍键 —— 上挥和下挥
-    @property({ type: Enum(KeyCode) })
-    public swingUpKey: KeyCode = KeyCode.KEY_W;
-
-    @property({ type: Enum(KeyCode) })
-    public swingDownKey: KeyCode = KeyCode.KEY_S;
-
-    @property({ type: Enum(KeyCode) })
-    public skillKey: KeyCode = KeyCode.SPACE;
-
-    @property
-    public minX: number = -600;
-    @property
-    public maxX: number = 600;
-
-    @property
-    public jumpSpeed: number = 720;
-
-    @property
-    public gravity: number = 1800;
+    @property public jumpSpeed: number = 720;
+    
+    @property public gravity: number = 1800;
+    
 
     // 击球力度
     @property
@@ -64,14 +47,25 @@ export class PlayerController extends Component {
     @property
     public angleToForceScale: number = 15;
 
-    @property
-    public swingAngleUp: number = 30; // 上挥时球拍向上旋转的角度（度）
-    @property
-    public swingAngleDown: number = -30; // 下挥时向下旋转的角度
-    @property
-    public swingDuration: number = 0.08; // 挥动持续秒数
-    @property
-    public swingRecoverDuration: number = 0.12; // 恢复时间
+    // ---------- 新增肢体节点引用 ----------
+    @property(Node) public leftLegNode: Node = null;
+    @property(Node) public rightLegNode: Node = null;
+    @property(Node) public leftArmNode: Node = null;
+    @property(Node) public rightArmNode: Node = null;  // 握拍手臂
+
+    // ---------- 腿部动画参数 ----------
+    @property public legSwingSpeed: number = 8;       // 摆动频率
+    @property public legSwingAngle: number = 25;      // 最大摆动角度（度）
+
+    // ---------- 手臂动画参数 ----------
+    @property public armSwingAngle: number = 15;      // 另一只手臂摆动角度
+
+    // ---------- 挥拍动画参数（现在应用于右手臂） ----------
+    @property public swingAngleUp: number = 45;       // 上挥手臂角度（向上抬）
+    @property public swingAngleDown: number = -20;    // 下挥手臂角度（向下压）
+    @property public swingDuration: number = 0.08;    // 挥动持续秒数
+    @property public swingRecoverDuration: number = 0.12;    // 恢复时间
+    @property public restArmAngle: number = 60;       // 手臂初始角度（准备姿势）
 
     // 球拍子节点（需要在属性里拖入）
     @property(Node)
@@ -91,6 +85,8 @@ export class PlayerController extends Component {
     @property
     public isLocalControlled: boolean = true;
 
+
+
     private _moveDirection: number = 0;
     private _isSwingUp: boolean = false;
     private _isSwingDown: boolean = false;
@@ -98,6 +94,7 @@ export class PlayerController extends Component {
     private _verticalSpeed: number = 0;
     private _groundY: number = -250;
     private _isGrounded: boolean = true;
+    private _lastSwingAngle: number = 0;
 
     // 引用 GameManager 组件（运行时查找）
     private _gameManager: any = null;
@@ -208,7 +205,7 @@ export class PlayerController extends Component {
         // 1. 先尝试发球（如果处于发球状态）
         if (this._gameManager && this._gameManager.tryServe) {
             const racketWorldPos = this.racketNode.worldPosition;
-            const facingRight = this.playerId === 1; // P1 朝右，P2 朝左
+            const facingRight = this.playerId === 2; // P1 朝右，P2 朝左
             this._gameManager.tryServe(this.playerId, racketWorldPos, facingRight);
         }
 
@@ -225,17 +222,23 @@ export class PlayerController extends Component {
     }
 
     private playSwingAnimation(isUp: boolean) {
-        if (!this.racketNode) return;
+        if (!this.rightArmNode) return;
 
-        // 停止球拍上正在进行的动画，防止冲突
-        tween(this.racketNode).stop();
+        tween(this.rightArmNode).stop();
+        // 瞬时复位到初始角度 (手臂自然下垂或微曲)
+        this.rightArmNode.eulerAngles = new Vec3(0, 0, this.restArmAngle);
 
         const targetAngle = isUp ? this.swingAngleUp : this.swingAngleDown;
-        // 挥动到目标角度
-        tween(this.racketNode)
-            .to(this.swingDuration, { eulerAngles: new Vec3(0, 0, targetAngle) }, { easing: 'quadOut' })
-            // 恢复原角度
-            .to(this.swingRecoverDuration, { eulerAngles: new Vec3(0, 0, 0) }, { easing: 'quadIn' })
+        this._lastSwingAngle = targetAngle;
+
+        tween(this.rightArmNode)
+            .to(this.swingDuration, { eulerAngles: new Vec3(0, 0, targetAngle) }, {
+                easing: 'quadOut',
+                onComplete: () => {
+                    this.onSwing();
+                }
+            })
+            .to(this.swingRecoverDuration, { eulerAngles: new Vec3(0, 0, this.restArmAngle) }, { easing: 'quadIn' })
             .start();
     }
 
@@ -287,6 +290,24 @@ export class PlayerController extends Component {
         return false;
     }
 
+    // 更新腿部与左臂（非握拍手）的摆动
+    private updateLimbAnimations(dt: number) {
+        const time = Date.now() / 1000; // 或者使用累计时间，这里简单用当前时间
+        // 根据移动方向计算摆幅（静止时不摆）
+        const active = Math.abs(this._moveDirection) > 0;
+        const swingFactor = active ? this._moveDirection : 0; // 正向或反向影响摆动相位
+
+        // 腿的摆动（正弦波，相位差180度）
+        const legAngle = active ? Math.sin(time * this.legSwingSpeed) * this.legSwingAngle : 0;
+        if (this.leftLegNode) this.leftLegNode.eulerAngles = new Vec3(0, 0, legAngle * swingFactor);
+        if (this.rightLegNode) this.rightLegNode.eulerAngles = new Vec3(0, 0, -legAngle * swingFactor);
+
+        // 左臂（非握拍手）自然摆动，与腿协调
+        const armAngle = active ? Math.sin(time * this.legSwingSpeed + Math.PI) * this.armSwingAngle : 0;
+        if (this.leftArmNode) this.leftArmNode.eulerAngles = new Vec3(0, 0, armAngle * swingFactor);
+    }
+
+
     update(deltaTime: number) {
         // 移动
         if (this._moveDirection !== 0) {
@@ -295,18 +316,8 @@ export class PlayerController extends Component {
             this.node.setPosition(clampedX, this.node.position.y, this.node.position.z);
         }
 
-        if (!this._isGrounded) {
-            this._verticalSpeed -= this.gravity * deltaTime;
-            const nextY = this.node.position.y + this._verticalSpeed * deltaTime;
-
-            if (nextY <= this._groundY) {
-                this.node.setPosition(this.node.position.x, this._groundY, this.node.position.z);
-                this._verticalSpeed = 0;
-                this._isGrounded = true;
-            } else {
-                this.node.setPosition(this.node.position.x, nextY, this.node.position.z);
-            }
-        }
+        // 更新腿部摆动和手臂摆动（移动时才动）
+        this.updateLimbAnimations(deltaTime);
 
         // 挥拍击球检测
         if ((this._isSwingUp || this._isSwingDown) && this.racketNode && this.shuttlecockNode) {
