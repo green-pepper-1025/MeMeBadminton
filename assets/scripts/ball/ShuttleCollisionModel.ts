@@ -33,6 +33,7 @@ export interface CeilingCollisionInput {
     ceilingRestitution: number;
     ceilingPushDown: number;
     ceilingMinFallSpeed: number;
+    ceilingMaxFallSpeed: number;
 }
 
 export interface CollisionResult {
@@ -138,11 +139,13 @@ export function resolveCeilingCollision(input: CeilingCollisionInput): CeilingCo
 
     const dampedDownwardSpeed = -Math.abs(input.velocityY) * Math.max(0, input.ceilingRestitution);
     const minimumDownwardSpeed = -Math.abs(input.ceilingMinFallSpeed);
+    const maximumDownwardSpeed = -Math.abs(input.ceilingMaxFallSpeed);
+    const cappedDownwardSpeed = Math.max(dampedDownwardSpeed, maximumDownwardSpeed);
 
     return {
         collided: true,
         nextY: clampedY,
         nextVelocityX: input.velocityX,
-        nextVelocityY: Math.min(dampedDownwardSpeed, minimumDownwardSpeed),
+        nextVelocityY: Math.min(cappedDownwardSpeed, minimumDownwardSpeed),
     };
 }

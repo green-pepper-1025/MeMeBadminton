@@ -117,6 +117,7 @@ export class PlayerController extends Component {
     private _hitLocked: boolean = false;
     private _hitCooldownRemaining: number = 0;
     private _inputLockRemaining: number = 0;
+    private _skillPoseLockRemaining: number = 0;
     private _currentHitAction: HitAction = 'high';
     private _groundY: number = -250;
     private _lastSwingAngle: number = 0;
@@ -313,6 +314,7 @@ export class PlayerController extends Component {
 
     public lockSkillInput(duration: number): void {
         this._inputLockRemaining = Math.max(this._inputLockRemaining, duration);
+        this._skillPoseLockRemaining = Math.max(this._skillPoseLockRemaining, duration);
         this._moveDirection = 0;
     }
 
@@ -453,6 +455,7 @@ export class PlayerController extends Component {
 
     update(deltaTime: number) {
         this._inputLockRemaining = Math.max(0, this._inputLockRemaining - deltaTime);
+        this._skillPoseLockRemaining = Math.max(0, this._skillPoseLockRemaining - deltaTime);
 
         // 移动
         if (this._moveDirection !== 0 && this._inputLockRemaining <= 0) {
@@ -465,9 +468,11 @@ export class PlayerController extends Component {
         this.updateLimbAnimations(deltaTime);
         this.updateHitLock(deltaTime);
 
-        const jumpState = this._jumpMotion.step(this.node.position.y, deltaTime);
-        if (jumpState.y !== this.node.position.y) {
-            this.node.setPosition(this.node.position.x, jumpState.y, this.node.position.z);
+        if (this._skillPoseLockRemaining <= 0) {
+            const jumpState = this._jumpMotion.step(this.node.position.y, deltaTime);
+            if (jumpState.y !== this.node.position.y) {
+                this.node.setPosition(this.node.position.x, jumpState.y, this.node.position.z);
+            }
         }
 
         // 击球动画期间持续检测，避免球在挥动中进入范围却漏判。

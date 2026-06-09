@@ -77,13 +77,16 @@ export class ShuttleCourtCollision extends Component {
     public ceilingThickness: number = 20;
 
     @property
-    public ceilingRestitution: number = 0.7;
+    public ceilingRestitution: number = 0.2;
 
     @property
     public ceilingPushDown: number = 4;
 
     @property
     public ceilingMinFallSpeed: number = 120;
+
+    @property
+    public ceilingMaxFallSpeed: number = 200;
 
     private _body: RigidBody2D = null;
     private _gameManager: BallPhysicsGate = null;
@@ -186,6 +189,7 @@ export class ShuttleCourtCollision extends Component {
             ceilingRestitution: this.ceilingRestitution,
             ceilingPushDown: this.ceilingPushDown,
             ceilingMinFallSpeed: this.ceilingMinFallSpeed,
+            ceilingMaxFallSpeed: this.ceilingMaxFallSpeed,
         });
         if (ceilingResult.collided) {
             nextY = ceilingResult.nextY;

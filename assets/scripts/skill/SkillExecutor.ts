@@ -88,9 +88,8 @@ export class SkillExecutor {
         }
 
         const shot = buildKobeSkillShot(playerId, this.kobeSkillConfig);
-        const skillWorldPosition = new Vec3(shot.skillPoint.x, shot.skillPoint.y, playerNode.worldPosition.z);
-        playerNode.setWorldPosition(skillWorldPosition);
-        ballNode.setWorldPosition(new Vec3(shot.skillPoint.x, shot.skillPoint.y - 24, ballNode.worldPosition.z));
+        playerNode.setPosition(shot.skillPoint.x, shot.skillPoint.y, playerNode.position.z);
+        ballNode.setPosition(shot.skillPoint.x, shot.skillPoint.y - 24, ballNode.position.z);
 
         const controller = playerNode.getComponent('PlayerController') as unknown;
         if (this.hasKobeSkillController(controller)) {

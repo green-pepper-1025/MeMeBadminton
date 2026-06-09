@@ -83,15 +83,16 @@ function testCeilingReflectsDownAndClampsBelowBoundary(): void {
         velocityY: 500,
         ceilingY: 700,
         shuttleRadius: 12,
-        ceilingRestitution: 0.7,
+        ceilingRestitution: 0.45,
         ceilingPushDown: 4,
         ceilingMinFallSpeed: 120,
+        ceilingMaxFallSpeed: 420,
     });
 
     assert(result.collided, 'upward shuttle above ceiling collides');
     assertClose(result.nextY, 684, 'ceiling collision clamps shuttle below top boundary');
     assertClose(result.nextVelocityX, 260, 'ceiling collision preserves horizontal velocity');
-    assertClose(result.nextVelocityY, -350, 'ceiling collision reverses and damps vertical speed');
+    assertClose(result.nextVelocityY, -225, 'ceiling collision reverses and damps vertical speed');
 }
 
 function testCeilingAppliesMinimumDownwardSpeedAfterWeakBounce(): void {
@@ -104,10 +105,28 @@ function testCeilingAppliesMinimumDownwardSpeedAfterWeakBounce(): void {
         ceilingRestitution: 0.6,
         ceilingPushDown: 3,
         ceilingMinFallSpeed: 120,
+        ceilingMaxFallSpeed: 420,
     });
 
     assert(result.collided, 'weak upward shuttle above ceiling collides');
     assertClose(result.nextVelocityY, -120, 'ceiling collision enforces a minimum downward speed');
+}
+
+function testCeilingLimitsVeryFastBounce(): void {
+    const result = resolveCeilingCollision({
+        currentY: 720,
+        velocityX: 180,
+        velocityY: 1600,
+        ceilingY: 700,
+        shuttleRadius: 12,
+        ceilingRestitution: 0.45,
+        ceilingPushDown: 4,
+        ceilingMinFallSpeed: 120,
+        ceilingMaxFallSpeed: 420,
+    });
+
+    assert(result.collided, 'very fast upward shuttle above ceiling collides');
+    assertClose(result.nextVelocityY, -420, 'ceiling collision caps excessive downward bounce speed');
 }
 
 function testActivationResetsPreviousXWhenBallWasInactive(): void {
@@ -125,4 +144,5 @@ testHighShuttleClearsNet();
 testSideWallReflectsAndClampsInsideCourt();
 testCeilingReflectsDownAndClampsBelowBoundary();
 testCeilingAppliesMinimumDownwardSpeedAfterWeakBounce();
+testCeilingLimitsVeryFastBounce();
 testActivationResetsPreviousXWhenBallWasInactive();
