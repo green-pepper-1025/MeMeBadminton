@@ -56,6 +56,14 @@ export class PlayerController extends Component {
     @property
     public angleToForceScale: number = 15;
 
+    // 随机仰角范围（度）
+    @property public minAngle: number = -10;   // 最小仰角（可向下）
+    @property public maxAngle: number = 30;    // 最大仰角
+
+    // 速度范围（与角度联动）
+    @property public maxSpeed: number = 150;   // 角度最小时的最高速度
+    @property public minSpeed: number = 70;   // 角度最大时的最低速度
+
     // ---------- 新增肢体节点引用 ----------
     @property(Node) public leftLegNode: Node = null;
     @property(Node) public rightLegNode: Node = null;
@@ -385,13 +393,30 @@ export class PlayerController extends Component {
             return false;
         }
 
-        const dirX = this.playerId === 1 ? 1 : -1;
-        const impulse =
-            action === 'low'
-                ? new Vec2(this.lowHitForceX * dirX, this.lowHitForceY)
-                : new Vec2(this.hitForceX * dirX, this.hitForceY);
+        // 先用随机仰角修复击球手感
+        const angle = this.minAngle + Math.random() * (this.maxAngle - this.minAngle);
+        const absAngle = Math.abs(angle);
+        const angleRad = angle * (Math.PI / 180);
 
+        // 速度：角度越小越快，角度越大越慢
+        const speed = this.maxSpeed - (absAngle / this.maxAngle) * (this.maxSpeed - this.minSpeed);
+
+        // 水平方向由玩家朝向决定
+        const dirX = this.playerId === 1 ? 1 : -1;
+        const vx = Math.cos(angleRad) * speed * dirX;
+        const vy = Math.sin(angleRad) * speed;
+
+        const impulse = new Vec2(vx, vy);
         ballBody.applyLinearImpulseToCenter(impulse, true);
+
+        // const dirX = this.playerId === 1 ? 1 : -1;
+        // const impulse =
+        //     action === 'low'
+        //         ? new Vec2(this.lowHitForceX * dirX, this.lowHitForceY)
+        //         : new Vec2(this.hitForceX * dirX, this.hitForceY);
+
+        // ballBody.applyLinearImpulseToCenter(impulse, true);
+        
         this._hitLocked = true;
         this._hitCooldownRemaining = this.hitCooldown;
         if (this._gameManager && this._gameManager.onPlayerHitBall) {

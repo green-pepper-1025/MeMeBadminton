@@ -315,12 +315,14 @@
     "shuttlecock": {
       "__id__": 14
     },
-    "netNode": null,
+    "netNode": {
+      "__id__": 36
+    },
     "floorY": 30,
     "pointsToWinRound": 11,
     "roundsToWinMatch": 2,
-    "serveForceX": 5,
-    "serveForceY": 3,
+    "serveForceX": -80,
+    "serveForceY": 50,
     "kobeSpriteFrame": {
       "__uuid__": "76a4ea5c-9074-4dfc-925c-2500f7d30cb1@f9941",
       "__expectedType__": "cc.SpriteFrame"
@@ -2328,6 +2330,10 @@
     "lowHitForceX": 30,
     "lowHitForceY": 90,
     "angleToForceScale": 15,
+    "minAngle": 10,
+    "maxAngle": 40,
+    "maxSpeed": 80,
+    "minSpeed": 50,
     "leftLegNode": {
       "__id__": 43
     },
@@ -3210,6 +3216,10 @@
     "lowHitForceX": 30,
     "lowHitForceY": 90,
     "angleToForceScale": 15,
+    "minAngle": 10,
+    "maxAngle": 40,
+    "maxSpeed": 80,
+    "minSpeed": 40,
     "leftLegNode": {
       "__id__": 66
     },
