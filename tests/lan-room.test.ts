@@ -61,6 +61,54 @@ function testBuildsForwardOnlyInputMessage(): void {
     assertEqual(forwarded.message.data.command.type, 'swing_up', 'input command is forwarded unchanged');
 }
 
+function testJoinResponseRejectsThirdPlayer(): void {
+    const room = new LanRoom('ROOM');
+    const first = room.joinWithResponse('client-a', { address: '192.168.1.10', port: 12346 });
+    const second = room.joinWithResponse('client-b', { address: '192.168.1.11', port: 12346 });
+    const third = room.joinWithResponse('client-c', { address: '192.168.1.12', port: 12346 });
+
+    assertEqual(first.success, true, 'first client can create host slot');
+    assertEqual(first.player_id, 'player1', 'first client is host player');
+    assertEqual(second.success, true, 'second client can join');
+    assertEqual(second.player_id, 'player2', 'second client is remote player');
+    assertEqual(third.success, false, 'third client is rejected');
+    assertEqual(third.reason, 'room_full', 'third client receives room_full reason');
+}
+
+function testClientInputTargetsHostAuthority(): void {
+    const room = new LanRoom('ROOM');
+    room.joinWithResponse('host-client', { address: '192.168.1.10', port: 12346 });
+    room.joinWithResponse('remote-client', { address: '192.168.1.11', port: 12346 });
+
+    const forwarded = room.buildHostAuthorityForward('remote-client', 'player_input', {
+        keys_pressed: ['MOVE_LEFT'],
+        keys_released: [],
+    });
+
+    assertEqual(forwarded.toClientId, 'host-client', 'remote input is sent to host authority');
+    assertEqual(forwarded.message.type, 'player_input', 'wire message uses UDP protocol type');
+    assertEqual(forwarded.message.player_id, 'player2', 'remote input keeps sender player id');
+}
+
+function testHostStateTargetsClientOnly(): void {
+    const room = new LanRoom('ROOM');
+    room.joinWithResponse('host-client', { address: '192.168.1.10', port: 12346 });
+    room.joinWithResponse('remote-client', { address: '192.168.1.11', port: 12346 });
+
+    const forwarded = room.buildClientStateForward('host-client', 'game_state', {
+        tanks: [],
+        bullets: [],
+        scores: { player1: 0, player2: 0 },
+    });
+
+    assertEqual(forwarded.toClientId, 'remote-client', 'host state is sent to remote client');
+    assertEqual(forwarded.message.type, 'game_state', 'wire message uses authoritative state type');
+    assertEqual(forwarded.message.player_id, 'player1', 'state sender is the host player');
+}
+
 testAssignsPlayerSlotsAndSnapshots();
 testReadyStartsMatchWithHostAuthority();
 testBuildsForwardOnlyInputMessage();
+testJoinResponseRejectsThirdPlayer();
+testClientInputTargetsHostAuthority();
+testHostStateTargetsClientOnly();

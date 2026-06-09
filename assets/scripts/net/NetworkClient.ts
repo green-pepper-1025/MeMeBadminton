@@ -1,4 +1,11 @@
-import { BallStatePayload, NetworkMessage, NetworkMessageType, RoomSnapshot, ScoreUpdatePayload } from './NetworkTypes';
+import {
+    BallStatePayload,
+    LanRoomAdvertise,
+    NetworkMessage,
+    NetworkMessageType,
+    RoomSnapshot,
+    ScoreUpdatePayload,
+} from './NetworkTypes';
 
 type NetworkHandler<T = any> = (data: T) => void;
 type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -90,6 +97,23 @@ export class NetworkClient {
         this.send('JOIN_ROOM', { roomId });
     }
 
+    public createRoom(roomName: string, hostName: string = 'Host'): void {
+        this.send('create_room', { room_id: roomName, room_name: roomName, host_name: hostName });
+    }
+
+    public browseRooms(): void {
+        this.send('browse_rooms', {});
+    }
+
+    public joinAdvertisedRoom(room: LanRoomAdvertise): void {
+        this.send('join_request', {
+            room_id: room.room_id,
+            host: room.host,
+            port: room.port,
+            player_name: 'Player',
+        });
+    }
+
     public selectCharacter(characterId: string): void {
         this.send('CHARACTER_SELECT', { characterId });
     }
@@ -99,15 +123,27 @@ export class NetworkClient {
     }
 
     public sendPlayerInput(command: any): void {
-        this.send('PLAYER_INPUT', { command });
+        this.send('player_input', { command });
     }
 
     public sendBallState(payload: BallStatePayload): void {
-        this.send('BALL_STATE', payload);
+        this.send('game_state', {
+            ball: payload,
+            round_info: {
+                currentServer: payload.currentServer,
+                gameState: payload.gameState,
+            },
+        });
     }
 
     public sendScoreUpdate(payload: ScoreUpdatePayload): void {
-        this.send('SCORE_UPDATE', payload);
+        this.send('game_state', {
+            scores: payload,
+            round_info: {
+                currentServer: payload.currentServer,
+                gameState: payload.gameState,
+            },
+        });
     }
 
     public sendMatchEvent(eventType: string, payload: any): void {
@@ -137,6 +173,7 @@ export class NetworkClient {
         }
 
         this.emitLocal(message.type, message.data);
+        this.emitCompatibility(message);
     }
 
     private emitLocal<T = any>(type: NetworkMessageType, data: T): void {
@@ -147,6 +184,43 @@ export class NetworkClient {
 
         handlers.forEach((handler) => handler(data));
     }
+
+    private emitCompatibility(message: NetworkMessage): void {
+        if (message.type === 'room_list') {
+            this.emitLocal('ROOM_LIST', message.data);
+            return;
+        }
+
+        if (message.type === 'join_response') {
+            this.emitLocal('JOIN_RESPONSE', message.data);
+            return;
+        }
+
+        if (message.type === 'game_start') {
+            this.emitLocal('MATCH_START', message.data);
+            return;
+        }
+
+        if (message.type === 'player_input') {
+            this.emitLocal('PLAYER_INPUT', message.data);
+            return;
+        }
+
+        if (message.type === 'game_state') {
+            const data = message.data || {};
+            if (data.ball) {
+                this.emitLocal('BALL_STATE', data.ball);
+            }
+            if (data.scores) {
+                this.emitLocal('SCORE_UPDATE', data.scores);
+            }
+            return;
+        }
+
+        if (message.type === 'disconnect') {
+            this.emitLocal('PLAYER_DISCONNECTED', message.data);
+        }
+    }
 }
 
-export type { RoomSnapshot, BallStatePayload, ScoreUpdatePayload };
+export type { LanRoomAdvertise, RoomSnapshot, BallStatePayload, ScoreUpdatePayload };

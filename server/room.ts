@@ -6,6 +6,7 @@ export interface RoomPlayer {
     characterId: string;
     isReady: boolean;
     connected: boolean;
+    endpoint?: LanEndpoint;
 }
 
 export interface RoomSnapshot {
@@ -20,8 +21,20 @@ export interface ForwardMessage {
     message: {
         type: string;
         data: any;
+        player_id?: PlayerId;
         timestamp: number;
     };
+}
+
+export interface LanEndpoint {
+    address: string;
+    port: number;
+}
+
+export interface JoinResponse {
+    success: boolean;
+    player_id?: PlayerId;
+    reason?: string;
 }
 
 export class LanRoom {
@@ -31,9 +44,29 @@ export class LanRoom {
     public constructor(private readonly _roomId: string) {}
 
     public join(clientId: string): RoomPlayer {
+        return this.joinPlayer(clientId);
+    }
+
+    public joinWithResponse(clientId: string, endpoint?: LanEndpoint): JoinResponse {
+        try {
+            const player = this.joinPlayer(clientId, endpoint);
+            return {
+                success: true,
+                player_id: player.playerId,
+            };
+        } catch (error) {
+            return {
+                success: false,
+                reason: error instanceof Error && error.message === 'Room is full' ? 'room_full' : 'join_failed',
+            };
+        }
+    }
+
+    private joinPlayer(clientId: string, endpoint?: LanEndpoint): RoomPlayer {
         const existing = this._players.find((player) => player.clientId === clientId);
         if (existing) {
             existing.connected = true;
+            existing.endpoint = endpoint ?? existing.endpoint;
             return existing;
         }
 
@@ -47,6 +80,7 @@ export class LanRoom {
             characterId: this._players.length === 0 ? 'kobe' : 'caixukun',
             isReady: false,
             connected: true,
+            endpoint,
         };
         this._players.push(player);
         return player;
@@ -89,6 +123,49 @@ export class LanRoom {
             message: {
                 type: 'PLAYER_INPUT',
                 data: { command },
+                timestamp: Date.now(),
+            },
+        };
+    }
+
+    public buildHostAuthorityForward(clientId: string, type: string, data: any): ForwardMessage {
+        const sender = this.requirePlayer(clientId);
+        const host = this._players.find((player) => player.playerId === 'player1' && player.connected);
+        if (!host) {
+            throw new Error('No host player');
+        }
+        if (sender.playerId === 'player1') {
+            throw new Error('Host input does not need forwarding');
+        }
+
+        return {
+            toClientId: host.clientId,
+            message: {
+                type,
+                data,
+                player_id: sender.playerId,
+                timestamp: Date.now(),
+            },
+        };
+    }
+
+    public buildClientStateForward(clientId: string, type: string, data: any): ForwardMessage {
+        const sender = this.requirePlayer(clientId);
+        if (sender.playerId !== 'player1') {
+            throw new Error('Only host can publish authoritative state');
+        }
+
+        const target = this._players.find((player) => player.playerId === 'player2' && player.connected);
+        if (!target) {
+            throw new Error('No client player');
+        }
+
+        return {
+            toClientId: target.clientId,
+            message: {
+                type,
+                data,
+                player_id: sender.playerId,
                 timestamp: Date.now(),
             },
         };

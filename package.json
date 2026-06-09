@@ -5,6 +5,7 @@
         "version": "3.8.8"
     },
     "scripts": {
+        "test": "tsc -p tsconfig.tests.json && node tests/run-all-tests.js",
         "typecheck": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/typecheck.ps1",
         "lint": "eslint \"assets/scripts/**/*.ts\"",
         "format": "prettier --write \"assets/scripts/**/*.ts\" \"docs/project-architecture.md\" \"docs/scene-analysis.md\" \"docs/build-guide.md\" \"*.json\"",

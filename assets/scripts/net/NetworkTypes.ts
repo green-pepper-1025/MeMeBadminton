@@ -1,8 +1,25 @@
 export type NetworkPlayerId = 'player1' | 'player2';
 
 export type NetworkMessageType =
+    | 'room_advertise'
+    | 'join_request'
+    | 'join_response'
+    | 'heartbeat'
+    | 'disconnect'
+    | 'player_input'
+    | 'game_start'
+    | 'game_state'
+    | 'game_end'
+    | 'map_sync'
+    | 'room_list'
+    | 'create_room'
+    | 'browse_rooms'
     | 'CONNECTED'
     | 'JOIN_ROOM'
+    | 'CREATE_ROOM'
+    | 'BROWSE_ROOMS'
+    | 'ROOM_LIST'
+    | 'JOIN_RESPONSE'
     | 'ROOM_SNAPSHOT'
     | 'CHARACTER_SELECT'
     | 'CHARACTER_READY'
@@ -19,7 +36,24 @@ export type NetworkMessageType =
 export interface NetworkMessage<T = any> {
     type: NetworkMessageType;
     data: T;
+    player_id?: NetworkPlayerId;
     timestamp: number;
+}
+
+export interface LanRoomAdvertise {
+    room_id: string;
+    room_name: string;
+    host_name: string;
+    host: string;
+    port: number;
+    players: number;
+    max_players: number;
+}
+
+export interface JoinResponsePayload {
+    success: boolean;
+    player_id?: NetworkPlayerId;
+    reason?: string;
 }
 
 export interface RoomPlayerState {
@@ -54,4 +88,15 @@ export interface ScoreUpdatePayload {
     currentServer: number;
     gameState: string;
     winnerPlayerId: NetworkPlayerId;
+}
+
+export interface GameStatePayload {
+    players?: Array<{
+        playerId: NetworkPlayerId;
+        position: { x: number; y: number; z: number };
+        active?: boolean;
+    }>;
+    ball?: BallStatePayload;
+    scores?: ScoreUpdatePayload;
+    round_info?: Record<string, any>;
 }
