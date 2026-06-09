@@ -24,6 +24,7 @@ import { SkillExecutor } from '../skill/SkillExecutor';
 import { SkillPlayerId, SkillSystem } from '../skill/SkillSystem';
 import { AudioManager } from '../audio/AudioManager';
 import { LocalCharacterSelect } from './LocalCharacterSelect';
+import { buildLanRoomViewModel, shouldRequestLanRoomBrowse } from './LanRoomFlowModel';
 import { buildScoreboardModel, buildSkillMeterModel } from './BattleHudModel';
 import { ShuttleCourtCollision } from '../ball/ShuttleCollision';
 import { lockRoundForScore, startNextRally } from './RoundScoringModel';
@@ -224,9 +225,12 @@ export class GameManager extends Component {
     private _roomSnapshot: RoomSnapshot = null;
     private _lanRooms: LanRoomAdvertise[] = [];
     private _pendingNetworkAction: () => void = null;
+    private _lanRoomBrowseElapsed: number = 0;
+    private _hasRequestedInitialLanBrowse: boolean = false;
     private _pendingBallState: BallStatePayload = null;
     private _ballSyncElapsed: number = 0;
     private readonly _ballSyncInterval: number = 1 / 15;
+    private readonly _lanRoomBrowseInterval: number = 3;
     private readonly _network: NetworkClient = NetworkClient.getInstance();
     private readonly _audioManager: AudioManager = AudioManager.getInstance();
     private readonly _skillSystem: SkillSystem = new SkillSystem();
@@ -618,6 +622,8 @@ export class GameManager extends Component {
     }
 
     update(deltaTime: number): void {
+        this.updateLanRoomDiscovery(deltaTime);
+
         if (this._appState === 'battle' && this._gameState === 'playing') {
             this._skillSystem.update(deltaTime);
             this._skillExecutor.update(deltaTime, this.shuttlecock);
@@ -649,6 +655,29 @@ export class GameManager extends Component {
         if (ballY <= this.floorY) {
             this.onBallLanded(this.shuttlecock.worldPosition.x);
         }
+    }
+
+    private updateLanRoomDiscovery(deltaTime: number): void {
+        if (this._appState !== 'online_room') {
+            return;
+        }
+        if (this._pendingNetworkAction) {
+            return;
+        }
+
+        this._lanRoomBrowseElapsed += deltaTime;
+        const shouldBrowse = shouldRequestLanRoomBrowse(
+            this._lanRoomBrowseElapsed,
+            this._lanRoomBrowseInterval,
+            !this._hasRequestedInitialLanBrowse,
+        );
+        if (!shouldBrowse) {
+            return;
+        }
+
+        this._hasRequestedInitialLanBrowse = true;
+        this._lanRoomBrowseElapsed = 0;
+        this.requestLanRooms();
     }
 
     private collectBattleNodes(): void {
@@ -931,40 +960,50 @@ export class GameManager extends Component {
     }
 
     private enterOnlineRoom(): void {
+        const isEnteringRoomPage = this._appState !== 'online_room';
         this._appState = 'online_room';
         this._battleMode = 'online';
         this._roomId = this._roomId === 'ABCD' ? 'LAN1' : this._roomId;
+        if (isEnteringRoomPage) {
+            this._hasRequestedInitialLanBrowse = false;
+            this._lanRoomBrowseElapsed = this._lanRoomBrowseInterval;
+        }
         this.clearFlowRoot();
         this.setBattleVisible(false);
 
-        this.addLabel('双人联机', 0, 180, 38);
-        this.addLabel(`本机侧车: ${this._serverUrl}`, 0, 126, 21);
-        this.addLabel(`状态: ${this._connectionStatus}`, 0, 88, 22);
-        this.addLabel(`当前房间: ${this._roomId}`, 0, 50, 23);
+        const model = buildLanRoomViewModel({
+            serverUrl: this._serverUrl,
+            connectionStatus: this._connectionStatus,
+            roomId: this._roomId,
+            snapshot: this._roomSnapshot,
+            lanRooms: this._lanRooms,
+        });
 
-        const p1 = this._roomSnapshot?.players.find((player) => player.playerId === 'player1');
-        const p2 = this._roomSnapshot?.players.find((player) => player.playerId === 'player2');
-        this.addLabel(`P1: ${p1?.connected ? '已加入' : '等待中'} ${p1?.isReady ? '/ 已准备' : ''}`, -290, 8, 21, 330);
-        this.addLabel(`P2: ${p2?.connected ? '已加入' : '等待中'} ${p2?.isReady ? '/ 已准备' : ''}`, 290, 8, 21, 330);
+        this.addLabel(model.title, 0, 210, 38);
+        this.addLabel(model.statusLines[0], 0, 160, 20);
+        this.addLabel(model.statusLines[1], 0, 126, 22);
+        this.addLabel(model.roomStateText, 0, 92, 23);
+        this.addLabel(model.statusLines[2], -290, 52, 21, 330);
+        this.addLabel(model.statusLines[3], 290, 52, 21, 330);
 
-        this.addButton('连接侧车', -330, -72, 190, 50, () => this.connectOnlineRoom(), new Color(42, 126, 210, 255));
-        this.addButton('创建房间', -110, -72, 190, 50, () => this.createLanRoom());
-        this.addButton('搜索房间', 110, -72, 190, 50, () => this.browseLanRooms(), new Color(48, 148, 98, 255));
-        this.addButton('修改地址', 330, -72, 190, 50, () => this.editServerAddress(), new Color(78, 84, 96, 255));
+        this.addButton('创建房间', -250, -15, 210, 54, () => this.createLanRoom());
+        this.addButton('刷新房间', 0, -15, 210, 54, () => this.browseLanRooms(), new Color(48, 148, 98, 255));
+        this.addButton('修改地址', 250, -15, 210, 54, () => this.editServerAddress(), new Color(78, 84, 96, 255));
 
-        if (this._lanRooms.length === 0) {
-            this.addLabel('未发现局域网房间', 0, -134, 20);
+        this.addLabel('房间列表', 0, -74, 24);
+        if (model.emptyListText) {
+            this.addLabel(model.emptyListText, 0, -128, 20);
         } else {
-            this._lanRooms.slice(0, 3).forEach((room, index) => {
-                const y = -128 - index * 46;
-                this.addLabel(
-                    `${room.room_name} / ${room.host_name} / ${room.players}-${room.max_players}`,
-                    -125,
-                    y,
-                    18,
-                    520,
-                );
-                this.addButton('加入', 250, y, 120, 38, () => this.joinLanRoom(room), new Color(48, 148, 98, 255));
+            model.roomRows.slice(0, 5).forEach((row, index) => {
+                const y = -120 - index * 44;
+                this.addRoomListItem(row.label, y, () => {
+                    if (row.joinable) {
+                        this.joinLanRoom(row.room);
+                        return;
+                    }
+                    this._connectionStatus = '加入失败: 房间已满';
+                    this.enterOnlineRoom();
+                }, row.joinable);
             });
         }
 
@@ -1405,6 +1444,8 @@ export class GameManager extends Component {
         this._connectionStatus = '已断开';
         if (this._battleMode === 'online' && this._appState === 'battle') {
             this.enterOnlineRoom();
+        } else if (this._battleMode === 'online' && this._appState === 'character_select') {
+            this.enterOnlineRoom();
         } else if (this._appState === 'online_room') {
             this.enterOnlineRoom();
         }
@@ -1412,7 +1453,7 @@ export class GameManager extends Component {
 
     private onNetworkError = (data: any): void => {
         this._connectionStatus = `错误: ${data?.message ?? '连接失败'}`;
-        if (this._appState === 'online_room') {
+        if (this._appState === 'online_room' || (this._battleMode === 'online' && this._appState === 'character_select')) {
             this.enterOnlineRoom();
         }
     };
@@ -1455,12 +1496,15 @@ export class GameManager extends Component {
             this._isHost = this._localPlayerId === snapshot.hostPlayerId;
         }
 
+        this._confirmedPlayers.player1 = false;
+        this._confirmedPlayers.player2 = false;
         for (const player of snapshot.players) {
             this._selectedCharacters[player.playerId] = player.characterId;
             this._confirmedPlayers[player.playerId] = player.isReady;
         }
 
-        if (this._appState === 'online_room' && snapshot.players.length >= 2) {
+        const connectedPlayers = snapshot.players.filter((player) => player.connected);
+        if (this._appState === 'online_room' && connectedPlayers.length >= 2) {
             this.enterCharacterSelect();
             return;
         }
@@ -1565,6 +1609,14 @@ export class GameManager extends Component {
     }
 
     private browseLanRooms(): void {
+        this.requestLanRooms();
+    }
+
+    private requestLanRooms(): void {
+        if (this._pendingNetworkAction) {
+            return;
+        }
+
         this.ensureNetworkReady(() => {
             this._connectionStatus = '正在搜索局域网房间';
             this._network.browseRooms();
@@ -1621,6 +1673,31 @@ export class GameManager extends Component {
             gameState: this._gameState,
             winnerPlayerId: winner === 1 ? 'player1' : 'player2',
         });
+    }
+
+    private addRoomListItem(labelText: string, y: number, onClick: () => void, joinable: boolean): Node {
+        const width = 760;
+        const height = 38;
+        const itemNode = new Node(`RoomListItem${y}`);
+        this._flowRoot.addChild(itemNode);
+        itemNode.setPosition(0, y, 0);
+        itemNode.addComponent(UITransform).setContentSize(width, height);
+        const graphics = itemNode.addComponent(Graphics);
+        graphics.fillColor = joinable ? new Color(40, 116, 92, 255) : new Color(72, 76, 84, 255);
+        graphics.roundRect(-width / 2, -height / 2, width, height, 6);
+        graphics.fill();
+        itemNode.on(Node.EventType.TOUCH_END, onClick, this);
+
+        const labelNode = new Node('Label');
+        itemNode.addChild(labelNode);
+        labelNode.addComponent(UITransform).setContentSize(width - 28, height);
+        const label = labelNode.addComponent(Label);
+        label.string = labelText;
+        label.fontSize = 18;
+        label.color = Color.WHITE;
+        label.horizontalAlign = Label.HorizontalAlign.CENTER;
+        label.verticalAlign = Label.VerticalAlign.CENTER;
+        return itemNode;
     }
 
     private smoothRemoteBall(deltaTime: number): void {

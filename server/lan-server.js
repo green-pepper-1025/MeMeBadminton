@@ -94,6 +94,30 @@ function broadcastSnapshot(room) {
             localPlayerId: player.playerId,
         });
     }
+    broadcastSnapshotToUdpPeers(room, snapshot);
+}
+
+function broadcastSnapshotToUdpPeers(room, snapshot = getSnapshot(room)) {
+    for (const player of room.players) {
+        if (!player.clientId.startsWith('udp:') || !player.connected) continue;
+        const peer = udpPeers.get(player.clientId);
+        if (peer) {
+            sendUdp(peer.address, peer.port, makeWire('ROOM_SNAPSHOT', {
+                ...snapshot,
+                localPlayerId: player.playerId,
+            }, player.playerId));
+        }
+    }
+}
+
+function broadcastMatchStartToUdpPeers(room, snapshot = getSnapshot(room)) {
+    for (const player of room.players) {
+        if (!player.clientId.startsWith('udp:') || !player.connected) continue;
+        const peer = udpPeers.get(player.clientId);
+        if (peer) {
+            sendUdp(peer.address, peer.port, makeWire('MATCH_START', snapshot, player.playerId));
+        }
+    }
 }
 
 function forwardToOther(senderClient, type, data) {
@@ -219,8 +243,37 @@ function handleCharacterReady(client, data) {
     broadcastSnapshot(room);
 
     if (room.matchStarted) {
-        broadcastRoom(room, 'MATCH_START', getSnapshot(room));
+        const snapshot = getSnapshot(room);
+        broadcastRoom(room, 'MATCH_START', snapshot);
+        broadcastMatchStartToUdpPeers(room, snapshot);
     }
+}
+
+function getDiscoveredHostForClient(client) {
+    if (!client.room) return null;
+    return Array.from(discoveredRooms.values()).find((item) => item.room_id === client.room.roomId) || null;
+}
+
+function isClientJoinedToRemoteHost(client) {
+    return Boolean(client.room?.players.some((player) => player.clientId === 'remote-host'));
+}
+
+function forwardRoomFlowToDiscoveredHost(client, type, data) {
+    const host = getDiscoveredHostForClient(client);
+    if (!host) return false;
+
+    sendUdp(host.host, host.port, makeWire(type, data, client.playerId || 'player2'));
+    return true;
+}
+
+function findLocalRemoteClient(roomId) {
+    const candidates = Array.from(clients.values()).filter((client) => {
+        if (!client.room || client.isHost) return false;
+        if (roomId && client.room.roomId !== roomId) return false;
+        return true;
+    });
+
+    return candidates[0] || clients.get(pendingJoinClientId) || null;
 }
 
 function handleDisconnect(client) {
@@ -348,6 +401,55 @@ function handleUdpGameMessage(raw, rinfo) {
         return;
     }
 
+    if (message.type === 'ROOM_SNAPSHOT') {
+        const client = findLocalRemoteClient(data.roomId);
+        if (client) {
+            send(client, 'ROOM_SNAPSHOT', data);
+        }
+        return;
+    }
+
+    if (message.type === 'MATCH_START') {
+        const client = findLocalRemoteClient(data.roomId);
+        if (client) {
+            send(client, 'MATCH_START', data);
+        }
+        return;
+    }
+
+    if (message.type === 'CHARACTER_SELECT') {
+        const host = clients.get(activeHostClientId);
+        if (!host || !host.room || !host.isHost) return;
+
+        const remoteClientId = `udp:${rinfo.address}:${rinfo.port}`;
+        const player = host.room.players.find((item) => item.clientId === remoteClientId);
+        if (!player || player.isReady) return;
+
+        player.characterId = data.characterId;
+        broadcastSnapshot(host.room);
+        return;
+    }
+
+    if (message.type === 'CHARACTER_READY') {
+        const host = clients.get(activeHostClientId);
+        if (!host || !host.room || !host.isHost) return;
+
+        const remoteClientId = `udp:${rinfo.address}:${rinfo.port}`;
+        const player = host.room.players.find((item) => item.clientId === remoteClientId);
+        if (!player) return;
+
+        player.isReady = Boolean(data.isReady);
+        host.room.matchStarted = host.room.players.length === 2 && host.room.players.every((item) => item.connected && item.isReady);
+        const snapshot = getSnapshot(host.room);
+        broadcastSnapshot(host.room);
+
+        if (host.room.matchStarted) {
+            broadcastRoom(host.room, 'MATCH_START', snapshot);
+            broadcastMatchStartToUdpPeers(host.room, snapshot);
+        }
+        return;
+    }
+
     if (message.type === 'player_input') {
         const host = clients.get(activeHostClientId);
         sendWire(host, makeWire('player_input', data, message.player_id || 'player2'));
@@ -417,9 +519,15 @@ wss.on('connection', (ws) => {
                 break;
             case 'CHARACTER_SELECT':
                 handleCharacterSelect(client, message.data || {});
+                if (!client.isHost && isClientJoinedToRemoteHost(client)) {
+                    forwardRoomFlowToDiscoveredHost(client, 'CHARACTER_SELECT', message.data || {});
+                }
                 break;
             case 'CHARACTER_READY':
                 handleCharacterReady(client, message.data || {});
+                if (!client.isHost && isClientJoinedToRemoteHost(client)) {
+                    forwardRoomFlowToDiscoveredHost(client, 'CHARACTER_READY', message.data || {});
+                }
                 break;
             case 'PLAYER_INPUT':
             case 'BALL_STATE':
