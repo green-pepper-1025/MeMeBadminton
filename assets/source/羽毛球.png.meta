@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "f41dcfc4-738b-4998-8978-4722b96f0689",
+  "uuid": "ec39b99a-dc0d-4dc0-82ce-a5c3ec0d94b5",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "f41dcfc4-738b-4998-8978-4722b96f0689@6c48a",
-      "displayName": "火柴人持羽毛球拍",
+      "uuid": "ec39b99a-dc0d-4dc0-82ce-a5c3ec0d94b5@6c48a",
+      "displayName": "羽毛球",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "f41dcfc4-738b-4998-8978-4722b96f0689",
+        "imageUuidOrDatabaseUri": "ec39b99a-dc0d-4dc0-82ce-a5c3ec0d94b5",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,21 +34,21 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "f41dcfc4-738b-4998-8978-4722b96f0689@f9941",
-      "displayName": "火柴人持羽毛球拍",
+      "uuid": "ec39b99a-dc0d-4dc0-82ce-a5c3ec0d94b5@f9941",
+      "displayName": "羽毛球",
       "id": "f9941",
       "name": "spriteFrame",
       "userData": {
         "trimThreshold": 1,
         "rotated": false,
-        "offsetX": 0,
-        "offsetY": 0,
-        "trimX": 0,
-        "trimY": 0,
-        "width": 2048,
-        "height": 2048,
-        "rawWidth": 2048,
-        "rawHeight": 2048,
+        "offsetX": 96.5,
+        "offsetY": 175,
+        "trimX": 193,
+        "trimY": 30,
+        "width": 1675,
+        "height": 1458,
+        "rawWidth": 1868,
+        "rawHeight": 1868,
         "borderTop": 0,
         "borderBottom": 0,
         "borderLeft": 0,
@@ -60,17 +60,17 @@
         "meshType": 0,
         "vertices": {
           "rawPosition": [
-            -1024,
-            -1024,
+            -837.5,
+            -729,
             0,
-            1024,
-            -1024,
+            837.5,
+            -729,
             0,
-            -1024,
-            1024,
+            -837.5,
+            729,
             0,
-            1024,
-            1024,
+            837.5,
+            729,
             0
           ],
           "indexes": [
@@ -82,38 +82,38 @@
             3
           ],
           "uv": [
-            0,
-            2048,
-            2048,
-            2048,
-            0,
-            0,
-            2048,
-            0
+            193,
+            1838,
+            1868,
+            1838,
+            193,
+            380,
+            1868,
+            380
           ],
           "nuv": [
-            0,
-            0,
+            0.10331905781584583,
+            0.20342612419700215,
             1,
-            0,
-            0,
+            0.20342612419700215,
+            0.10331905781584583,
+            0.9839400428265525,
             1,
-            1,
-            1
+            0.9839400428265525
           ],
           "minPos": [
-            -1024,
-            -1024,
+            -837.5,
+            -729,
             0
           ],
           "maxPos": [
-            1024,
-            1024,
+            837.5,
+            729,
             0
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "f41dcfc4-738b-4998-8978-4722b96f0689@6c48a",
+        "imageUuidOrDatabaseUri": "ec39b99a-dc0d-4dc0-82ce-a5c3ec0d94b5@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -128,7 +128,7 @@
   "userData": {
     "type": "sprite-frame",
     "fixAlphaTransparencyArtifacts": false,
-    "hasAlpha": false,
-    "redirect": "f41dcfc4-738b-4998-8978-4722b96f0689@6c48a"
+    "hasAlpha": true,
+    "redirect": "ec39b99a-dc0d-4dc0-82ce-a5c3ec0d94b5@6c48a"
   }
 }
