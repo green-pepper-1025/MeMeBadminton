@@ -11,6 +11,7 @@
         "tests/**/*.ts",
         "assets/scripts/core/BattleHudModel.ts",
         "assets/scripts/core/HitDecision.ts",
+        "assets/scripts/core/LanRoomFlowModel.ts",
         "assets/scripts/core/LocalCharacterSelect.ts",
         "assets/scripts/core/RoundScoringModel.ts",
         "assets/scripts/audio/CharacterAudioCues.ts",
