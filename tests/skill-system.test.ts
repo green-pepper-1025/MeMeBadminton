@@ -68,6 +68,19 @@ function testSkillUseEntersShortCooldown(): void {
     assert(skills.tryUseSkill('player1').success, 'skill can be used after cooldown expires and charge is ready');
 }
 
+function testKunSkillConsumesUseAndCooldown(): void {
+    const skills = new SkillSystem();
+    skills.initializePlayer('player2', 'jiyin_dance');
+    skills.update(20);
+
+    const result = skills.tryUseSkill('player2');
+    assert(result.success, 'Kun special can be used when charged');
+    assertEqual(result.skillId, 'jiyin_dance', 'Kun special keeps its skill id');
+    assertEqual(skills.getState('player2').usesRemaining, 2, 'Kun special consumes one use');
+    assertEqual(skills.tryUseSkill('player2').success, false, 'Kun special cannot be reused during cooldown');
+}
+
 testChargeAndUseConditions();
 testRoundResetAndUseLimit();
 testSkillUseEntersShortCooldown();
+testKunSkillConsumesUseAndCooldown();

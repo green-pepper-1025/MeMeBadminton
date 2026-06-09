@@ -137,16 +137,49 @@ export class GameManager extends Component {
     public kobeSkillHorizontalSpeed: number = 980;
 
     @property
-    public kobeSkillVerticalSpeed: number = 1180;
+    public kobeSkillVerticalSpeed: number = 220;
 
     @property
-    public kobeSkillDownwardForce: number = 180;
+    public kobeSkillDownwardForce: number = 40;
 
     @property
     public kobeSkillDuration: number = 0.32;
 
     @property
     public kobeSkillInputLockDuration: number = 0.28;
+
+    @property(Vec3)
+    public leftKunSkillPoint: Vec3 = new Vec3(-380, 92, 0);
+
+    @property(Vec3)
+    public rightKunSkillPoint: Vec3 = new Vec3(380, 92, 0);
+
+    @property
+    public kunSkillHorizontalSpeed: number = 900;
+
+    @property
+    public kunSkillDuration: number = 0.82;
+
+    @property
+    public kunSkillCurveAmplitude: number = 94;
+
+    @property
+    public kunSkillCurveFrequency: number = 1.5;
+
+    @property
+    public kunSkillVerticalLift: number = 88;
+
+    @property
+    public kunSkillVerticalDrop: number = 70;
+
+    @property
+    public kunSkillBallOffsetY: number = -18;
+
+    @property
+    public kunSkillControlPoints: number = 18;
+
+    @property
+    public kunSkillInputLockDuration: number = 0.32;
 
     private _score1: number = 0;
     private _score2: number = 0;
@@ -396,7 +429,7 @@ export class GameManager extends Component {
             return false;
         }
 
-        this.syncKobeSkillConfig();
+        this.syncSkillConfigs();
         const effectApplied = this._skillExecutor.execute(state.skillId, skillPlayerId, playerNode, this.shuttlecock);
         if (!effectApplied) {
             return false;
@@ -405,6 +438,11 @@ export class GameManager extends Component {
         const result = this._skillSystem.tryUseSkill(skillPlayerId);
         this.updateScoreLabels();
         return result.success;
+    }
+
+    private syncSkillConfigs(): void {
+        this.syncKobeSkillConfig();
+        this.syncKunSkillConfig();
     }
 
     private syncKobeSkillConfig(): void {
@@ -416,6 +454,21 @@ export class GameManager extends Component {
         config.kobeSkillDownwardForce = this.kobeSkillDownwardForce;
         config.kobeSkillDuration = this.kobeSkillDuration;
         config.kobeSkillInputLockDuration = this.kobeSkillInputLockDuration;
+    }
+
+    private syncKunSkillConfig(): void {
+        const config = this._skillExecutor.kunSkillConfig;
+        config.leftKunSkillPoint = { x: this.leftKunSkillPoint.x, y: this.leftKunSkillPoint.y };
+        config.rightKunSkillPoint = { x: this.rightKunSkillPoint.x, y: this.rightKunSkillPoint.y };
+        config.kunSkillHorizontalSpeed = this.kunSkillHorizontalSpeed;
+        config.kunSkillDuration = this.kunSkillDuration;
+        config.kunSkillCurveAmplitude = this.kunSkillCurveAmplitude;
+        config.kunSkillCurveFrequency = this.kunSkillCurveFrequency;
+        config.kunSkillVerticalLift = this.kunSkillVerticalLift;
+        config.kunSkillVerticalDrop = this.kunSkillVerticalDrop;
+        config.kunSkillBallOffsetY = this.kunSkillBallOffsetY;
+        config.kunSkillControlPoints = this.kunSkillControlPoints;
+        config.kunSkillInputLockDuration = this.kunSkillInputLockDuration;
     }
 
     public canApplyBallPhysics(): boolean {
@@ -525,7 +578,8 @@ export class GameManager extends Component {
         }
 
         const collision =
-            this.shuttlecock.getComponent(ShuttleCourtCollision) ?? this.shuttlecock.addComponent(ShuttleCourtCollision);
+            this.shuttlecock.getComponent(ShuttleCourtCollision) ??
+            this.shuttlecock.addComponent(ShuttleCourtCollision);
         collision.gameManagerNode = this.node;
         collision.netNode = this.netNode;
         collision.floorY = this.floorY;
@@ -609,8 +663,18 @@ export class GameManager extends Component {
         this._battleNodes.push(this._battleHudRoot);
 
         this._scoreboardHud = this.createScoreboardHud();
-        this._skillMeterHuds.player1 = this.createSkillMeterHud('Player1SkillHud', -455, 252, new Color(55, 174, 255, 255));
-        this._skillMeterHuds.player2 = this.createSkillMeterHud('Player2SkillHud', 455, 252, new Color(255, 96, 86, 255));
+        this._skillMeterHuds.player1 = this.createSkillMeterHud(
+            'Player1SkillHud',
+            -455,
+            252,
+            new Color(55, 174, 255, 255),
+        );
+        this._skillMeterHuds.player2 = this.createSkillMeterHud(
+            'Player2SkillHud',
+            455,
+            252,
+            new Color(255, 96, 86, 255),
+        );
     }
 
     private createScoreboardHud(): ScoreboardHudRefs {
@@ -729,7 +793,11 @@ export class GameManager extends Component {
             const state = this._skillSystem.getState(playerId);
             const model = buildSkillMeterModel(state);
             hud.usesLabel.string = model.usesText;
-            this.drawSkillMeterFill(hud.fillGraphics, model.fillRatio, model.isFull ? new Color(255, 220, 91, 255) : hud.color);
+            this.drawSkillMeterFill(
+                hud.fillGraphics,
+                model.fillRatio,
+                model.isFull ? new Color(255, 220, 91, 255) : hud.color,
+            );
         } catch {
             hud.usesLabel.string = 'x0';
             this.drawSkillMeterFill(hud.fillGraphics, 0, hud.color);

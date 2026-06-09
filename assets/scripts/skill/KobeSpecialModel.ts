@@ -24,8 +24,8 @@ export const DEFAULT_KOBE_SKILL_CONFIG: KobeSkillConfig = {
     leftKobeSkillPoint: { x: -285, y: -30 },
     rightKobeSkillPoint: { x: 285, y: -30 },
     kobeSkillHorizontalSpeed: 980,
-    kobeSkillVerticalSpeed: 1180,
-    kobeSkillDownwardForce: 180,
+    kobeSkillVerticalSpeed: 220,
+    kobeSkillDownwardForce: 40,
     kobeSkillDuration: 0.32,
     kobeSkillInputLockDuration: 0.28,
 };

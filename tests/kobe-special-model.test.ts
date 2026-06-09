@@ -10,6 +10,12 @@ function assertEqual<T>(actual: T, expected: T, message: string): void {
     }
 }
 
+function assert(condition: boolean, message: string): void {
+    if (!condition) {
+        throw new Error(message);
+    }
+}
+
 function testLeftKobeSkillShotCrossesToRightDownCourt(): void {
     const point = getKobeSkillPoint('player1', DEFAULT_KOBE_SKILL_CONFIG);
     const shot = buildKobeSkillShot('player1', DEFAULT_KOBE_SKILL_CONFIG);
@@ -38,5 +44,26 @@ function testRightKobeSkillShotCrossesToLeftDownCourt(): void {
     );
 }
 
+function testDefaultKobeSkillShotClearsNetBeforeLanding(): void {
+    const floorY = -350;
+    const netHeight = 140;
+    const ballOffsetY = -24;
+    const requiredNetClearance = 18;
+    const leftShot = buildKobeSkillShot('player1', DEFAULT_KOBE_SKILL_CONFIG);
+    const rightShot = buildKobeSkillShot('player2', DEFAULT_KOBE_SKILL_CONFIG);
+
+    const leftStartY = leftShot.skillPoint.y + ballOffsetY;
+    const leftTimeToNet = Math.abs(leftShot.skillPoint.x / leftShot.velocity.x);
+    const leftYAtNet = leftStartY + leftShot.velocity.y * leftTimeToNet;
+
+    const rightStartY = rightShot.skillPoint.y + ballOffsetY;
+    const rightTimeToNet = Math.abs(rightShot.skillPoint.x / rightShot.velocity.x);
+    const rightYAtNet = rightStartY + rightShot.velocity.y * rightTimeToNet;
+
+    assert(leftYAtNet > floorY + netHeight + requiredNetClearance, 'left Kobe default shot should clear the net');
+    assert(rightYAtNet > floorY + netHeight + requiredNetClearance, 'right Kobe default shot should clear the net');
+}
+
 testLeftKobeSkillShotCrossesToRightDownCourt();
 testRightKobeSkillShotCrossesToLeftDownCourt();
+testDefaultKobeSkillShotClearsNetBeforeLanding();
