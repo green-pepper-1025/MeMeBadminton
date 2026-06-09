@@ -53,5 +53,21 @@ function testRoundResetAndUseLimit(): void {
     assertEqual(state.usesRemaining, 3, 'round reset restores uses');
 }
 
+function testSkillUseEntersShortCooldown(): void {
+    const skills = new SkillSystem();
+    skills.initializePlayer('player1', 'helicopter_smash');
+    skills.update(20);
+
+    assert(skills.tryUseSkill('player1').success, 'first ready use succeeds');
+    for (let i = 0; i < 7; i++) {
+        skills.addHitCharge('player1');
+    }
+    assertEqual(skills.tryUseSkill('player1').success, false, 'skill cannot be reused during cooldown');
+
+    skills.update(0.35);
+    assert(skills.tryUseSkill('player1').success, 'skill can be used after cooldown expires and charge is ready');
+}
+
 testChargeAndUseConditions();
 testRoundResetAndUseLimit();
+testSkillUseEntersShortCooldown();

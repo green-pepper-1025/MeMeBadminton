@@ -8,6 +8,7 @@ export interface SkillState {
     charge: number;
     usesRemaining: number;
     isReady: boolean;
+    cooldownRemaining: number;
 }
 
 export interface SkillUseResult {
@@ -22,6 +23,7 @@ export class SkillSystem {
     public readonly maxUsesPerRound: number = 3;
     public readonly timeToFullCharge: number = 20;
     public readonly hitChargeAmount: number = 15;
+    public readonly useCooldown: number = 0.35;
 
     private readonly _states: Map<SkillPlayerId, SkillState> = new Map();
 
@@ -32,6 +34,7 @@ export class SkillSystem {
             charge: 0,
             usesRemaining: this.maxUsesPerRound,
             isReady: false,
+            cooldownRemaining: 0,
         });
     }
 
@@ -41,7 +44,10 @@ export class SkillSystem {
         }
 
         const chargeAmount = (this.maxCharge / this.timeToFullCharge) * deltaTime;
-        this._states.forEach((state) => this.addChargeToState(state, chargeAmount));
+        this._states.forEach((state) => {
+            state.cooldownRemaining = Math.max(0, state.cooldownRemaining - deltaTime);
+            this.addChargeToState(state, chargeAmount);
+        });
     }
 
     public addHitCharge(playerId: SkillPlayerId): void {
@@ -63,13 +69,14 @@ export class SkillSystem {
             return { success: false, playerId, skillId: state.skillId, reason: 'no_uses_remaining' };
         }
 
-        if (!state.isReady) {
+        if (!state.isReady || state.cooldownRemaining > 0) {
             return { success: false, playerId, skillId: state.skillId, reason: 'not_ready' };
         }
 
         state.charge = 0;
         state.isReady = false;
         state.usesRemaining--;
+        state.cooldownRemaining = this.useCooldown;
 
         return { success: true, playerId, skillId: state.skillId };
     }
@@ -79,6 +86,7 @@ export class SkillSystem {
             state.charge = 0;
             state.usesRemaining = this.maxUsesPerRound;
             state.isReady = false;
+            state.cooldownRemaining = 0;
         });
     }
 

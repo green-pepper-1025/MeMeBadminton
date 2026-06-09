@@ -116,6 +116,7 @@ export class PlayerController extends Component {
     private _isSwingDown: boolean = false;
     private _hitLocked: boolean = false;
     private _hitCooldownRemaining: number = 0;
+    private _inputLockRemaining: number = 0;
     private _currentHitAction: HitAction = 'high';
     private _groundY: number = -250;
     private _lastSwingAngle: number = 0;
@@ -196,6 +197,10 @@ export class PlayerController extends Component {
 
     public handleCommand(command: PlayerCommand): void {
         if (command.playerId !== this.playerId) {
+            return;
+        }
+
+        if (this._inputLockRemaining > 0 && command.type !== CommandType.USE_SKILL) {
             return;
         }
 
@@ -304,6 +309,23 @@ export class PlayerController extends Component {
                 },
             })
             .start();
+    }
+
+    public lockSkillInput(duration: number): void {
+        this._inputLockRemaining = Math.max(this._inputLockRemaining, duration);
+        this._moveDirection = 0;
+    }
+
+    public playSkillSmashAnimation(): void {
+        this._currentHitAction = 'high';
+        this._isSwingUp = true;
+        this._isSwingDown = false;
+        this.playSwingAnimation(true);
+    }
+
+    public lockHitAfterSkill(duration: number = this.hitCooldown): void {
+        this._hitLocked = true;
+        this._hitCooldownRemaining = Math.max(this._hitCooldownRemaining, duration);
     }
 
     private jump(): void {
@@ -430,8 +452,10 @@ export class PlayerController extends Component {
 
 
     update(deltaTime: number) {
+        this._inputLockRemaining = Math.max(0, this._inputLockRemaining - deltaTime);
+
         // 移动
-        if (this._moveDirection !== 0) {
+        if (this._moveDirection !== 0 && this._inputLockRemaining <= 0) {
             const newX = this.node.position.x + this._moveDirection * this.moveSpeed * deltaTime;
             const clampedX = Math.max(this.minX, Math.min(this.maxX, newX));
             this.node.setPosition(clampedX, this.node.position.y, this.node.position.z);

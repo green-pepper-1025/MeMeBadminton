@@ -1,4 +1,5 @@
-import { Node, RigidBody2D, Vec2, Vec3 } from 'cc';
+import { Node, RigidBody2D, Vec2, Vec3, tween } from 'cc';
+import { buildKobeSkillShot, DEFAULT_KOBE_SKILL_CONFIG, KobeSkillConfig } from './KobeSpecialModel';
 
 type SkillPlayerId = 'player1' | 'player2';
 
@@ -18,6 +19,7 @@ interface JiyinDanceEffect {
 
 export class SkillExecutor {
     private readonly _duangEffects: Map<SkillPlayerId, DuangEffect> = new Map();
+    public readonly kobeSkillConfig: KobeSkillConfig = { ...DEFAULT_KOBE_SKILL_CONFIG };
     private _jiyinDanceEffect: JiyinDanceEffect = null;
 
     public execute(skillId: string, playerId: SkillPlayerId, playerNode: Node, ballNode: Node): boolean {
@@ -85,15 +87,36 @@ export class SkillExecutor {
             return false;
         }
 
-        const ballWorldPosition = ballNode.worldPosition;
-        playerNode.setWorldPosition(
-            new Vec3(ballWorldPosition.x, ballWorldPosition.y + 120, playerNode.worldPosition.z),
-        );
+        const shot = buildKobeSkillShot(playerId, this.kobeSkillConfig);
+        const skillWorldPosition = new Vec3(shot.skillPoint.x, shot.skillPoint.y, playerNode.worldPosition.z);
+        playerNode.setWorldPosition(skillWorldPosition);
+        ballNode.setWorldPosition(new Vec3(shot.skillPoint.x, shot.skillPoint.y - 24, ballNode.worldPosition.z));
 
-        const dirX = playerId === 'player1' ? 1 : -1;
-        ballBody.linearVelocity = new Vec2(360 * dirX, -1200);
+        const controller = playerNode.getComponent('PlayerController') as unknown;
+        if (this.hasKobeSkillController(controller)) {
+            controller.lockSkillInput(this.kobeSkillConfig.kobeSkillInputLockDuration);
+            controller.lockHitAfterSkill(this.kobeSkillConfig.kobeSkillDuration);
+            controller.playSkillSmashAnimation();
+        }
+
+        ballBody.linearVelocity = new Vec2(shot.velocity.x, shot.velocity.y);
         ballBody.angularVelocity = 0;
+        this.playKobeSkillFeedback(playerNode, ballNode);
         return true;
+    }
+
+    private playKobeSkillFeedback(playerNode: Node, ballNode: Node): void {
+        const playerScale = playerNode.scale.clone();
+        tween(playerNode)
+            .to(0.05, { scale: new Vec3(playerScale.x * 1.12, playerScale.y * 1.12, playerScale.z) })
+            .to(0.12, { scale: playerScale }, { easing: 'quadOut' })
+            .start();
+
+        const ballScale = ballNode.scale.clone();
+        tween(ballNode)
+            .to(0.04, { scale: new Vec3(ballScale.x * 1.35, ballScale.y * 0.75, ballScale.z) })
+            .to(0.12, { scale: ballScale }, { easing: 'quadOut' })
+            .start();
     }
 
     private executeJiyinDance(ballNode: Node): boolean {
@@ -170,6 +193,18 @@ export class SkillExecutor {
             typeof (controller as { hitRange?: unknown }).hitRange === 'number' &&
             typeof (controller as { hitRangeX?: unknown }).hitRangeX === 'number' &&
             typeof (controller as { hitRangeY?: unknown }).hitRangeY === 'number'
+        );
+    }
+
+    private hasKobeSkillController(
+        controller: unknown,
+    ): controller is { lockSkillInput: (duration: number) => void; playSkillSmashAnimation: () => void; lockHitAfterSkill: (duration?: number) => void } {
+        return (
+            typeof controller === 'object' &&
+            controller !== null &&
+            typeof (controller as { lockSkillInput?: unknown }).lockSkillInput === 'function' &&
+            typeof (controller as { playSkillSmashAnimation?: unknown }).playSkillSmashAnimation === 'function' &&
+            typeof (controller as { lockHitAfterSkill?: unknown }).lockHitAfterSkill === 'function'
         );
     }
 }

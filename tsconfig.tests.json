@@ -13,6 +13,7 @@
         "assets/scripts/core/HitDecision.ts",
         "assets/scripts/core/LocalCharacterSelect.ts",
         "assets/scripts/core/RoundScoringModel.ts",
+        "assets/scripts/skill/KobeSpecialModel.ts",
         "assets/scripts/skill/SkillSystem.ts",
         "server/**/*.ts"
     ]
