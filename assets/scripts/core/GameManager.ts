@@ -127,6 +127,27 @@ export class GameManager extends Component {
     @property
     public characterBodyHeight: number = 132;
 
+    @property(Vec3)
+    public leftKobeSkillPoint: Vec3 = new Vec3(-285, -30, 0);
+
+    @property(Vec3)
+    public rightKobeSkillPoint: Vec3 = new Vec3(285, -30, 0);
+
+    @property
+    public kobeSkillHorizontalSpeed: number = 980;
+
+    @property
+    public kobeSkillVerticalSpeed: number = 1180;
+
+    @property
+    public kobeSkillDownwardForce: number = 180;
+
+    @property
+    public kobeSkillDuration: number = 0.32;
+
+    @property
+    public kobeSkillInputLockDuration: number = 0.28;
+
     private _score1: number = 0;
     private _score2: number = 0;
     private _roundsWon1: number = 0;
@@ -375,6 +396,7 @@ export class GameManager extends Component {
             return false;
         }
 
+        this.syncKobeSkillConfig();
         const effectApplied = this._skillExecutor.execute(state.skillId, skillPlayerId, playerNode, this.shuttlecock);
         if (!effectApplied) {
             return false;
@@ -383,6 +405,17 @@ export class GameManager extends Component {
         const result = this._skillSystem.tryUseSkill(skillPlayerId);
         this.updateScoreLabels();
         return result.success;
+    }
+
+    private syncKobeSkillConfig(): void {
+        const config = this._skillExecutor.kobeSkillConfig;
+        config.leftKobeSkillPoint = { x: this.leftKobeSkillPoint.x, y: this.leftKobeSkillPoint.y };
+        config.rightKobeSkillPoint = { x: this.rightKobeSkillPoint.x, y: this.rightKobeSkillPoint.y };
+        config.kobeSkillHorizontalSpeed = this.kobeSkillHorizontalSpeed;
+        config.kobeSkillVerticalSpeed = this.kobeSkillVerticalSpeed;
+        config.kobeSkillDownwardForce = this.kobeSkillDownwardForce;
+        config.kobeSkillDuration = this.kobeSkillDuration;
+        config.kobeSkillInputLockDuration = this.kobeSkillInputLockDuration;
     }
 
     public canApplyBallPhysics(): boolean {
