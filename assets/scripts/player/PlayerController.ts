@@ -84,15 +84,11 @@ export class PlayerController extends Component {
     @property(Node)
     public shuttlecockNode: Node = null;
 
-    // 击球判定的最大距离
-    @property
-    public hitRange: number = 80;
-
-    @property
-    public hitRangeX: number = 80;
-
-    @property
-    public hitRangeY: number = 120;
+    // 击球判定
+    @property(Node) public hitPointNode: Node = null;   // 击球判定点（球拍上的空节点）
+    @property public hitRange: number = 80;
+    @property public hitRangeX: number = 80;
+    @property public hitRangeY: number = 120;
 
     @property
     public lowHitThreshold: number = -20;
@@ -424,10 +420,14 @@ export class PlayerController extends Component {
             return;
         }
 
+        if (!this.hitPointNode) {
+            // 如果未设置击球点，退化为使用球员节点
+            this.hitPointNode = this.racketNode ? this.racketNode : this.node;
+        }
         const ballWorldPos = this.shuttlecockNode.getWorldPosition();
-        const playerWorldPos = this.node.getWorldPosition();
-        const dx = ballWorldPos.x - playerWorldPos.x;
-        const dy = ballWorldPos.y - playerWorldPos.y;
+        const hitPointWorldPos = this.hitPointNode.getWorldPosition();
+        const dx = ballWorldPos.x - hitPointWorldPos.x;
+        const dy = ballWorldPos.y - hitPointWorldPos.y;
         const shuttleStillInRange = isShuttleInHitRange(dx, dy, this.getHitDecisionConfig());
 
         if (!shuttleStillInRange || this._hitCooldownRemaining <= 0) {

@@ -194,7 +194,7 @@
     "_priority": 0,
     "_fov": 45,
     "_fovAxis": 0,
-    "_orthoHeight": 591.6981132075472,
+    "_orthoHeight": 482.46153846153845,
     "_near": 0,
     "_far": 2000,
     "_color": {
@@ -2063,7 +2063,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": -80,
+      "y": -100,
       "z": 0
     },
     "_lrot": {
@@ -2091,7 +2091,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "Racket",
+    "_name": "HitPoint",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -2108,7 +2108,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": -50,
+      "y": 30,
       "z": 0
     },
     "_lrot": {
@@ -2168,8 +2168,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 20,
-      "height": 80
+      "width": 30,
+      "height": 120
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -2260,7 +2260,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "29ff75cb-94bb-4c29-a5b3-ef25f19c732f@f9941",
+      "__uuid__": "b91c7c88-5a6a-4b90-bc8c-e5c7f9237537@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -2354,9 +2354,12 @@
     "shuttlecockNode": {
       "__id__": 14
     },
+    "hitPointNode": {
+      "__id__": 54
+    },
     "hitRange": 80,
-    "hitRangeX": 80,
-    "hitRangeY": 120,
+    "hitRangeX": 30,
+    "hitRangeY": 50,
     "lowHitThreshold": -20,
     "highHitMinY": 20,
     "hitCooldown": 0.18,
@@ -2942,7 +2945,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": -80,
+      "y": -100,
       "z": 0
     },
     "_lrot": {
@@ -2970,7 +2973,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "Racket",
+    "_name": "HitPoint",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -2987,7 +2990,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": -50,
+      "y": 30,
       "z": 0
     },
     "_lrot": {
@@ -3047,8 +3050,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 20,
-      "height": 80
+      "width": 30,
+      "height": 120
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -3139,7 +3142,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "29ff75cb-94bb-4c29-a5b3-ef25f19c732f@f9941",
+      "__uuid__": "b91c7c88-5a6a-4b90-bc8c-e5c7f9237537@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -3233,9 +3236,12 @@
     "shuttlecockNode": {
       "__id__": 14
     },
+    "hitPointNode": {
+      "__id__": 77
+    },
     "hitRange": 80,
-    "hitRangeX": 80,
-    "hitRangeY": 120,
+    "hitRangeX": 30,
+    "hitRangeY": 50,
     "lowHitThreshold": -20,
     "highHitMinY": 20,
     "hitCooldown": 0.18,
