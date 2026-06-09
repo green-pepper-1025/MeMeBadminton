@@ -24,9 +24,27 @@ export interface SideWallCollisionInput {
     wallVerticalRetention: number;
 }
 
+export interface CeilingCollisionInput {
+    currentY: number;
+    velocityX: number;
+    velocityY: number;
+    ceilingY: number;
+    shuttleRadius: number;
+    ceilingRestitution: number;
+    ceilingPushDown: number;
+    ceilingMinFallSpeed: number;
+}
+
 export interface CollisionResult {
     collided: boolean;
     nextX: number;
+    nextVelocityX: number;
+    nextVelocityY: number;
+}
+
+export interface CeilingCollisionResult {
+    collided: boolean;
+    nextY: number;
     nextVelocityX: number;
     nextVelocityY: number;
 }
@@ -102,5 +120,29 @@ export function resolveSideWallCollision(input: SideWallCollisionInput): Collisi
         nextX: input.currentX,
         nextVelocityX: input.velocityX,
         nextVelocityY: input.velocityY,
+    };
+}
+
+export function resolveCeilingCollision(input: CeilingCollisionInput): CeilingCollisionResult {
+    const maxY = input.ceilingY - Math.max(0, input.shuttleRadius);
+    const clampedY = maxY - Math.max(0, input.ceilingPushDown);
+
+    if (input.currentY <= maxY || input.velocityY <= 0) {
+        return {
+            collided: false,
+            nextY: input.currentY,
+            nextVelocityX: input.velocityX,
+            nextVelocityY: input.velocityY,
+        };
+    }
+
+    const dampedDownwardSpeed = -Math.abs(input.velocityY) * Math.max(0, input.ceilingRestitution);
+    const minimumDownwardSpeed = -Math.abs(input.ceilingMinFallSpeed);
+
+    return {
+        collided: true,
+        nextY: clampedY,
+        nextVelocityX: input.velocityX,
+        nextVelocityY: Math.min(dampedDownwardSpeed, minimumDownwardSpeed),
     };
 }

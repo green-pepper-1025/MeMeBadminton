@@ -1,5 +1,6 @@
 import {
     getActivationPreviousX,
+    resolveCeilingCollision,
     resolveNetCollision,
     resolveSideWallCollision,
 } from '../assets/scripts/ball/ShuttleCollisionModel';
@@ -75,6 +76,40 @@ function testSideWallReflectsAndClampsInsideCourt(): void {
     assertClose(result.nextVelocityY, 144, 'wall collision preserves most vertical speed');
 }
 
+function testCeilingReflectsDownAndClampsBelowBoundary(): void {
+    const result = resolveCeilingCollision({
+        currentY: 716,
+        velocityX: 260,
+        velocityY: 500,
+        ceilingY: 700,
+        shuttleRadius: 12,
+        ceilingRestitution: 0.7,
+        ceilingPushDown: 4,
+        ceilingMinFallSpeed: 120,
+    });
+
+    assert(result.collided, 'upward shuttle above ceiling collides');
+    assertClose(result.nextY, 684, 'ceiling collision clamps shuttle below top boundary');
+    assertClose(result.nextVelocityX, 260, 'ceiling collision preserves horizontal velocity');
+    assertClose(result.nextVelocityY, -350, 'ceiling collision reverses and damps vertical speed');
+}
+
+function testCeilingAppliesMinimumDownwardSpeedAfterWeakBounce(): void {
+    const result = resolveCeilingCollision({
+        currentY: 713,
+        velocityX: -80,
+        velocityY: 90,
+        ceilingY: 700,
+        shuttleRadius: 12,
+        ceilingRestitution: 0.6,
+        ceilingPushDown: 3,
+        ceilingMinFallSpeed: 120,
+    });
+
+    assert(result.collided, 'weak upward shuttle above ceiling collides');
+    assertClose(result.nextVelocityY, -120, 'ceiling collision enforces a minimum downward speed');
+}
+
 function testActivationResetsPreviousXWhenBallWasInactive(): void {
     const previousX = getActivationPreviousX({
         currentX: -480,
@@ -88,4 +123,6 @@ function testActivationResetsPreviousXWhenBallWasInactive(): void {
 testLowShuttleHitsNetWhenCrossingCenterLine();
 testHighShuttleClearsNet();
 testSideWallReflectsAndClampsInsideCourt();
+testCeilingReflectsDownAndClampsBelowBoundary();
+testCeilingAppliesMinimumDownwardSpeedAfterWeakBounce();
 testActivationResetsPreviousXWhenBallWasInactive();

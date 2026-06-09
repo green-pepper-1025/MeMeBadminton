@@ -1,5 +1,10 @@
-import { _decorator, Component, Node, RigidBody2D, Vec2, Vec3 } from 'cc';
-import { getActivationPreviousX, resolveNetCollision, resolveSideWallCollision } from './ShuttleCollisionModel';
+import { _decorator, BoxCollider2D, Component, Node, RigidBody2D, Size, UITransform, Vec2, Vec3 } from 'cc';
+import {
+    getActivationPreviousX,
+    resolveCeilingCollision,
+    resolveNetCollision,
+    resolveSideWallCollision,
+} from './ShuttleCollisionModel';
 const { ccclass, property } = _decorator;
 
 interface BallPhysicsGate {
@@ -22,6 +27,9 @@ export class ShuttleCourtCollision extends Component {
 
     @property(Node)
     public rightWallNode: Node = null;
+
+    @property(Node)
+    public ceilingNode: Node = null;
 
     @property
     public floorY: number = 30;
@@ -58,6 +66,24 @@ export class ShuttleCourtCollision extends Component {
 
     @property
     public wallVerticalRetention: number = 0.9;
+
+    @property
+    public ceilingY: number = 700;
+
+    @property
+    public ceilingWidth: number = 1280;
+
+    @property
+    public ceilingThickness: number = 20;
+
+    @property
+    public ceilingRestitution: number = 0.7;
+
+    @property
+    public ceilingPushDown: number = 4;
+
+    @property
+    public ceilingMinFallSpeed: number = 120;
 
     private _body: RigidBody2D = null;
     private _gameManager: BallPhysicsGate = null;
@@ -105,6 +131,7 @@ export class ShuttleCourtCollision extends Component {
 
         const velocity = this._body.linearVelocity;
         let nextX = currentX;
+        let nextY = worldPosition.y;
         let nextVelocityX = velocity.x;
         let nextVelocityY = velocity.y;
 
@@ -150,8 +177,24 @@ export class ShuttleCourtCollision extends Component {
             nextVelocityY = wallResult.nextVelocityY;
         }
 
-        if (netResult.collided || wallResult.collided) {
-            this._nextWorldPosition.set(nextX, worldPosition.y, worldPosition.z);
+        const ceilingResult = resolveCeilingCollision({
+            currentY: nextY,
+            velocityX: nextVelocityX,
+            velocityY: nextVelocityY,
+            ceilingY: this.getCeilingY(),
+            shuttleRadius: this.shuttleRadius,
+            ceilingRestitution: this.ceilingRestitution,
+            ceilingPushDown: this.ceilingPushDown,
+            ceilingMinFallSpeed: this.ceilingMinFallSpeed,
+        });
+        if (ceilingResult.collided) {
+            nextY = ceilingResult.nextY;
+            nextVelocityX = ceilingResult.nextVelocityX;
+            nextVelocityY = ceilingResult.nextVelocityY;
+        }
+
+        if (netResult.collided || wallResult.collided || ceilingResult.collided) {
+            this._nextWorldPosition.set(nextX, nextY, worldPosition.z);
             this.node.setWorldPosition(this._nextWorldPosition);
             this._nextVelocity.set(nextVelocityX, nextVelocityY);
             this._body.linearVelocity = this._nextVelocity;
@@ -181,6 +224,10 @@ export class ShuttleCourtCollision extends Component {
         if (!this.rightWallNode) {
             this.rightWallNode = walls?.getChildByName('WallRight') ?? null;
         }
+        if (!this.ceilingNode) {
+            this.ceilingNode =
+                walls?.getChildByName('Ceiling') ?? walls?.getChildByName('TopWall') ?? this.createCeilingNode(walls);
+        }
 
         if (typeof this._gameManager?.floorY === 'number') {
             this.floorY = this._gameManager.floorY;
@@ -205,6 +252,29 @@ export class ShuttleCourtCollision extends Component {
 
     private getRightWallX(): number {
         return this.rightWallNode?.worldPosition.x ?? this.rightWallX;
+    }
+
+    private getCeilingY(): number {
+        return this.ceilingNode?.worldPosition.y ?? this.ceilingY;
+    }
+
+    private createCeilingNode(walls: Node | null): Node | null {
+        if (!walls) {
+            return null;
+        }
+
+        const ceiling = new Node('Ceiling');
+        walls.addChild(ceiling);
+        ceiling.setWorldPosition(0, this.ceilingY, 0);
+
+        const transform = ceiling.addComponent(UITransform);
+        transform.setContentSize(this.ceilingWidth, this.ceilingThickness);
+
+        const collider = ceiling.addComponent(BoxCollider2D);
+        collider.sensor = true;
+        collider.size = new Size(this.ceilingWidth, this.ceilingThickness);
+
+        return ceiling;
     }
 
     private getApproximateShuttleHeight(worldY: number): number {
