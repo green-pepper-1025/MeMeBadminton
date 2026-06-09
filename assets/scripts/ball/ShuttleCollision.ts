@@ -6,6 +6,7 @@ interface BallPhysicsGate {
     netNode?: Node;
     floorY?: number;
     canApplyBallPhysics?: () => boolean;
+    onBallNetFailed?: (ballX: number) => void;
 }
 
 @ccclass('ShuttleCourtCollision')
@@ -126,6 +127,10 @@ export class ShuttleCourtCollision extends Component {
             nextX = netResult.nextX;
             nextVelocityX = netResult.nextVelocityX;
             nextVelocityY = netResult.nextVelocityY;
+            this._gameManager?.onBallNetFailed?.(nextX);
+            if (!this.node.active) {
+                return;
+            }
         }
 
         // 左右墙只处理横向反弹，纵向速度保留一部分，让球继续自然飞行。

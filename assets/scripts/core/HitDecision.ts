@@ -1,0 +1,24 @@
+export type HitAction = 'high' | 'low';
+
+export interface HitDecisionConfig {
+    hitRangeX: number;
+    hitRangeY: number;
+    lowHitThreshold: number;
+    highHitMinY: number;
+}
+
+export function isShuttleInHitRange(dx: number, dy: number, config: HitDecisionConfig): boolean {
+    return Math.abs(dx) <= config.hitRangeX && Math.abs(dy) <= config.hitRangeY;
+}
+
+export function chooseHitAction(dx: number, dy: number, config: HitDecisionConfig): HitAction | null {
+    if (!isShuttleInHitRange(dx, dy, config)) {
+        return null;
+    }
+
+    if (dy < config.lowHitThreshold) {
+        return 'low';
+    }
+
+    return 'high';
+}

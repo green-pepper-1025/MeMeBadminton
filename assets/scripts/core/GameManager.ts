@@ -19,6 +19,7 @@ import { SkillPlayerId, SkillSystem } from '../skill/SkillSystem';
 import { LocalCharacterSelect } from './LocalCharacterSelect';
 import { buildScoreboardModel, buildSkillMeterModel } from './BattleHudModel';
 import { ShuttleCourtCollision } from '../ball/ShuttleCollision';
+import { lockRoundForScore, startNextRally } from './RoundScoringModel';
 const { ccclass, property } = _decorator;
 
 type GameState = 'waitingServe' | 'playing' | 'roundEnd' | 'matchEnd';
@@ -133,6 +134,7 @@ export class GameManager extends Component {
 
     // 当前状态：'waitingServe' | 'playing' | 'roundEnd' | 'matchEnd'
     private _gameState: GameState = 'waitingServe';
+    private _hasScoredThisRally: boolean = false;
     // 当前发球方：1 或 2
     private _currentServer: number = 1;
     private _appState: AppState = 'main_menu';
@@ -231,9 +233,13 @@ export class GameManager extends Component {
     }
 
     // 供外部调用：得分后进入发球状态
-    private addScoreAndServe(winner: 1 | 2): void {
+    private addScoreAndServe(winner: 1 | 2): boolean {
         if (!this.canApplyBallPhysics()) {
-            return;
+            return false;
+        }
+
+        if (!this.lockCurrentRallyForScore()) {
+            return false;
         }
 
         this._skillExecutor.clearEffects();
@@ -252,11 +258,12 @@ export class GameManager extends Component {
         if (this._score1 >= this.pointsToWinRound || this._score2 >= this.pointsToWinRound) {
             this.endRound(winner);
             this.broadcastScoreUpdate(winner);
-            return;
+            return true;
         }
 
         this._gameState = 'waitingServe';
         this.broadcastScoreUpdate(winner);
+        return true;
     }
 
     // 发球：由 PlayerController 调用
@@ -292,7 +299,7 @@ export class GameManager extends Component {
         }
 
         // 进入比赛状态
-        this._gameState = 'playing';
+        this.startRally();
         this.broadcastBallState();
     }
 
@@ -305,13 +312,31 @@ export class GameManager extends Component {
             return;
         }
 
-        // 获取球网世界 X 坐标作为分界线
-        const dividerX = this.netNode ? this.netNode.worldPosition.x : 0;
-        const winner = ballX < dividerX ? 2 : 1;
+        this.scoreFromBallPosition(ballX, '落点');
+    }
 
-        console.log(`[落点] X: ${ballX}, 分界: ${dividerX}, 判定: ${winner === 2 ? '左半场 P2得分' : '右半场 P1得分'}`);
+    public onBallNetFailed(ballX: number): void {
+        if (!this.canApplyBallPhysics()) {
+            return;
+        }
 
-        this.addScoreAndServe(winner as 1 | 2);
+        if (this._gameState !== 'playing') {
+            return;
+        }
+
+        this.scoreFromBallPosition(ballX, '碰网失败');
+    }
+
+    public onBallOutOfBounds(ballX: number): void {
+        if (!this.canApplyBallPhysics()) {
+            return;
+        }
+
+        if (this._gameState !== 'playing') {
+            return;
+        }
+
+        this.scoreFromBallPosition(ballX, '出界');
     }
 
     public onPlayerHitBall(playerId: number): void {
@@ -395,6 +420,7 @@ export class GameManager extends Component {
         this._gameState = 'roundEnd';
         this._score1 = 0;
         this._score2 = 0;
+        this._hasScoredThisRally = false;
         this._skillExecutor.clearEffects();
         this._skillSystem.resetRound();
         this.updateScoreLabels();
@@ -412,8 +438,52 @@ export class GameManager extends Component {
             ballBody.angularVelocity = 0;
         }
 
+        const servePosition = this.getCurrentServeWorldPosition();
+        if (servePosition) {
+            this.shuttlecock.setWorldPosition(servePosition);
+        }
+        this.shuttlecock.setRotationFromEuler(Vec3.ZERO);
         this.shuttlecock.getComponent(ShuttleCourtCollision)?.resetFlightState(false);
         this.shuttlecock.active = false;
+    }
+
+    private startRally(): void {
+        const state = {
+            gameState: this._gameState,
+            hasScoredThisRally: this._hasScoredThisRally,
+        };
+        startNextRally(state);
+        this._gameState = state.gameState;
+        this._hasScoredThisRally = state.hasScoredThisRally;
+    }
+
+    private lockCurrentRallyForScore(): boolean {
+        const state = {
+            gameState: this._gameState,
+            hasScoredThisRally: this._hasScoredThisRally,
+        };
+        const accepted = lockRoundForScore(state);
+        this._gameState = state.gameState;
+        this._hasScoredThisRally = state.hasScoredThisRally;
+        return accepted;
+    }
+
+    private scoreFromBallPosition(ballX: number, reason: string): void {
+        const dividerX = this.netNode ? this.netNode.worldPosition.x : 0;
+        const winner = ballX < dividerX ? 2 : 1;
+
+        if (!this.addScoreAndServe(winner as 1 | 2)) {
+            return;
+        }
+
+        console.log(
+            `[${reason}] X: ${ballX}, 分界: ${dividerX}, 判定: ${winner === 2 ? '左半场 P2得分' : '右半场 P1得分'}`,
+        );
+    }
+
+    private getCurrentServeWorldPosition(): Vec3 {
+        const serverNode = this._currentServer === 1 ? this._player1Node : this._player2Node;
+        return (serverNode?.getChildByName('Racket') ?? serverNode)?.worldPosition.clone() ?? null;
     }
 
     private ensureShuttleCollision(): void {
@@ -981,6 +1051,7 @@ export class GameManager extends Component {
         this._roundsWon2 = 0;
         this._currentServer = 1;
         this._gameState = 'waitingServe';
+        this._hasScoredThisRally = false;
         this._skillExecutor.clearEffects();
         this._skillSystem.resetRound();
         this.resetBall();

@@ -5,6 +5,8 @@ type SkillPlayerId = 'player1' | 'player2';
 interface DuangEffect {
     controller: unknown;
     originalHitRange: number;
+    originalHitRangeX: number;
+    originalHitRangeY: number;
     remaining: number;
 }
 
@@ -61,10 +63,16 @@ export class SkillExecutor {
 
         const activeEffect = this._duangEffects.get(playerId);
         const originalHitRange = activeEffect?.originalHitRange ?? controller.hitRange;
+        const originalHitRangeX = activeEffect?.originalHitRangeX ?? controller.hitRangeX;
+        const originalHitRangeY = activeEffect?.originalHitRangeY ?? controller.hitRangeY;
         controller.hitRange = originalHitRange * 3;
+        controller.hitRangeX = originalHitRangeX * 3;
+        controller.hitRangeY = originalHitRangeY * 3;
         this._duangEffects.set(playerId, {
             controller,
             originalHitRange,
+            originalHitRangeX,
+            originalHitRangeY,
             remaining: 3,
         });
 
@@ -150,14 +158,18 @@ export class SkillExecutor {
     private restoreHitRange(effect: DuangEffect): void {
         if (this.hasHitRange(effect.controller)) {
             effect.controller.hitRange = effect.originalHitRange;
+            effect.controller.hitRangeX = effect.originalHitRangeX;
+            effect.controller.hitRangeY = effect.originalHitRangeY;
         }
     }
 
-    private hasHitRange(controller: unknown): controller is { hitRange: number } {
+    private hasHitRange(controller: unknown): controller is { hitRange: number; hitRangeX: number; hitRangeY: number } {
         return (
             typeof controller === 'object' &&
             controller !== null &&
-            typeof (controller as { hitRange?: unknown }).hitRange === 'number'
+            typeof (controller as { hitRange?: unknown }).hitRange === 'number' &&
+            typeof (controller as { hitRangeX?: unknown }).hitRangeX === 'number' &&
+            typeof (controller as { hitRangeY?: unknown }).hitRangeY === 'number'
         );
     }
 }

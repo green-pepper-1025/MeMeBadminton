@@ -13,6 +13,7 @@ import {
     tween,
 } from 'cc';
 import { CommandType, PlayerCommand } from '../core/InputRouter';
+import { chooseHitAction, HitAction, HitDecisionConfig, isShuttleInHitRange } from '../core/HitDecision';
 import { JumpMotion } from '../core/JumpMotion';
 const { ccclass, property } = _decorator;
 
@@ -22,6 +23,7 @@ export class PlayerController extends Component {
     @property({ type: Enum(KeyCode) }) public leftKey: KeyCode = KeyCode.KEY_A;
     @property({ type: Enum(KeyCode) }) public rightKey: KeyCode = KeyCode.KEY_D;
     @property({ type: Enum(KeyCode) }) public jumpKey: KeyCode = KeyCode.KEY_W;
+    @property({ type: Enum(KeyCode) }) public strikeKey: KeyCode = KeyCode.KEY_S;
     @property({ type: Enum(KeyCode) }) public swingUpKey: KeyCode = KeyCode.KEY_W;
     @property({ type: Enum(KeyCode) }) public swingDownKey: KeyCode = KeyCode.KEY_S;
     @property({ type: Enum(KeyCode) }) public skillKey: KeyCode = KeyCode.SPACE;
@@ -43,6 +45,12 @@ export class PlayerController extends Component {
     // 击球力度基础值（普通击球）
     @property
     public hitForceBase: number = 800;
+
+    @property
+    public lowHitForceX: number = 180;
+
+    @property
+    public lowHitForceY: number = 900;
 
     // 角度对垂直力的影响系数（度 -> 力）
     @property
@@ -81,6 +89,21 @@ export class PlayerController extends Component {
     public hitRange: number = 80;
 
     @property
+    public hitRangeX: number = 80;
+
+    @property
+    public hitRangeY: number = 120;
+
+    @property
+    public lowHitThreshold: number = -20;
+
+    @property
+    public highHitMinY: number = 20;
+
+    @property
+    public hitCooldown: number = 0.18;
+
+    @property
     public playerId: number = 1; // 1 或 2，在编辑器里给 Player1 设为 1，Player2 设为 2
 
     @property
@@ -92,6 +115,8 @@ export class PlayerController extends Component {
     private _isSwingUp: boolean = false;
     private _isSwingDown: boolean = false;
     private _hitLocked: boolean = false;
+    private _hitCooldownRemaining: number = 0;
+    private _currentHitAction: HitAction = 'high';
     private _groundY: number = -250;
     private _lastSwingAngle: number = 0;
     private _jumpMotion: JumpMotion = new JumpMotion({
@@ -142,10 +167,8 @@ export class PlayerController extends Component {
             command = { playerId: this.playerId, type: CommandType.MOVE_RIGHT, timestamp: Date.now() };
         } else if (event.keyCode === this.jumpKey) {
             command = { playerId: this.playerId, type: CommandType.JUMP, timestamp: Date.now() };
-        } else if (event.keyCode === this.swingUpKey) {
-            command = { playerId: this.playerId, type: CommandType.SWING_UP, timestamp: Date.now() };
-        } else if (event.keyCode === this.swingDownKey) {
-            command = { playerId: this.playerId, type: CommandType.SWING_DOWN, timestamp: Date.now() };
+        } else if (event.keyCode === this.strikeKey) {
+            command = { playerId: this.playerId, type: CommandType.STRIKE, timestamp: Date.now() };
         } else if (event.keyCode === this.skillKey) {
             command = { playerId: this.playerId, type: CommandType.USE_SKILL, timestamp: Date.now() };
         }
@@ -165,12 +188,9 @@ export class PlayerController extends Component {
             const command: PlayerCommand = { playerId: this.playerId, type: CommandType.STOP_MOVE, timestamp: Date.now() };
             this.handleCommand(command);
             this._gameManager?.onLocalPlayerCommand?.(command);
-        } else if (event.keyCode === this.swingUpKey) {
+        } else if (event.keyCode === this.strikeKey) {
             this._isSwingUp = false;
-            this._hitLocked = false;
-        } else if (event.keyCode === this.swingDownKey) {
             this._isSwingDown = false;
-            this._hitLocked = false;
         }
     }
 
@@ -192,15 +212,14 @@ export class PlayerController extends Component {
             case CommandType.JUMP:
                 this.jump();
                 break;
+            case CommandType.STRIKE:
+                this.onStrikePressed();
+                break;
             case CommandType.SWING_UP:
-                this._isSwingUp = true;
-                this.playSwingAnimation(true);
-                this.onSwing();
+                this.performHighHit();
                 break;
             case CommandType.SWING_DOWN:
-                this._isSwingDown = true;
-                this.playSwingAnimation(false);
-                this.onSwing();
+                this.performLowHit();
                 break;
             case CommandType.USE_SKILL:
                 this.useSkill();
@@ -208,20 +227,33 @@ export class PlayerController extends Component {
         }
     }
 
-    // 挥拍时触发的逻辑（击球 + 发球尝试）
-    private onSwing() {
+    // 统一击球入口：输入层只发送“击球”，具体动作由球相对玩家的位置决定。
+    private onStrikePressed(): void {
+        if (!this.shuttlecockNode || !this.shuttlecockNode.active) {
+            this.tryServe();
+            this.performHighHit(false);
+            return;
+        }
+
+        const action = this.selectHitAction();
+        if (!action) {
+            return;
+        }
+
+        if (action === 'low') {
+            this.performLowHit();
+        } else {
+            this.performHighHit();
+        }
+    }
+
+    private tryServe(): void {
         if (!this.racketNode) return;
 
-        // 1. 先尝试发球（如果处于发球状态）
         if (this._gameManager && this._gameManager.tryServe) {
             const racketWorldPos = this.racketNode.worldPosition;
             const facingRight = this.playerId === 2; // P1 朝右，P2 朝左
             this._gameManager.tryServe(this.playerId, racketWorldPos, facingRight);
-        }
-
-        // 2. 如果球已经在场上，进行正常击球检测
-        if (this.shuttlecockNode && this.shuttlecockNode.active) {
-            this.checkAndHit();
         }
     }
 
@@ -239,13 +271,16 @@ export class PlayerController extends Component {
         if (this.leftKey === KeyCode.KEY_A) this.leftKey = KeyCode.ARROW_LEFT;
         if (this.rightKey === KeyCode.KEY_D) this.rightKey = KeyCode.ARROW_RIGHT;
         if (this.jumpKey === KeyCode.KEY_W) this.jumpKey = KeyCode.ARROW_UP;
-        if (this.swingUpKey === KeyCode.KEY_W) this.swingUpKey = KeyCode.ARROW_UP;
-        if (this.swingDownKey === KeyCode.KEY_S) this.swingDownKey = KeyCode.ARROW_DOWN;
+        if (this.strikeKey === KeyCode.KEY_S) this.strikeKey = KeyCode.ARROW_DOWN;
         if (this.skillKey === KeyCode.SPACE) this.skillKey = KeyCode.ENTER;
     }
 
     private playSwingAnimation(isUp: boolean) {
-        if (!this.rightArmNode) return;
+        if (!this.rightArmNode) {
+            this._isSwingUp = false;
+            this._isSwingDown = false;
+            return;
+        }
 
         tween(this.rightArmNode).stop();
         // 瞬时复位到初始角度 (手臂自然下垂或微曲)
@@ -258,10 +293,16 @@ export class PlayerController extends Component {
             .to(this.swingDuration, { eulerAngles: new Vec3(0, 0, targetAngle) }, {
                 easing: 'quadOut',
                 onComplete: () => {
-                    this.onSwing();
+                    this.performHit();
                 }
             })
-            .to(this.swingRecoverDuration, { eulerAngles: new Vec3(0, 0, this.restArmAngle) }, { easing: 'quadIn' })
+            .to(this.swingRecoverDuration, { eulerAngles: new Vec3(0, 0, this.restArmAngle) }, {
+                easing: 'quadIn',
+                onComplete: () => {
+                    this._isSwingUp = false;
+                    this._isSwingDown = false;
+                },
+            })
             .start();
     }
 
@@ -269,43 +310,105 @@ export class PlayerController extends Component {
         this._jumpMotion.tryJump();
     }
 
-    private checkAndHit(): boolean {
-        // 获取球拍的世界坐标
-        const racketWorldPos = this.racketNode.getWorldPosition();
-        const ballWorldPos = this.shuttlecockNode.getWorldPosition();
+    private performHighHit(tryHit: boolean = true): void {
+        this._currentHitAction = 'high';
+        this._isSwingUp = true;
+        this._isSwingDown = false;
+        this.playSwingAnimation(true);
+        if (tryHit) {
+            this.performHit();
+        }
+    }
 
-        // 计算水平与垂直距离
-        const dx = ballWorldPos.x - racketWorldPos.x;
-        const dy = ballWorldPos.y - racketWorldPos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+    private performLowHit(): void {
+        this._currentHitAction = 'low';
+        this._isSwingUp = false;
+        this._isSwingDown = true;
+        this.playSwingAnimation(false);
+        this.performHit();
+    }
 
-        if (dist < this.hitRange) {
-            const ballBody = this.shuttlecockNode.getComponent(RigidBody2D);
-            if (ballBody) {
-                if (this._gameManager?.canApplyBallPhysics && !this._gameManager.canApplyBallPhysics()) {
-                    return false;
-                }
-
-                if (this._hitLocked) {
-                    return;
-                }
-
-                // 根据玩家方向确定水平力方向
-                const dirX = this.playerId === 1 ? 1 : -1;
-                // 上挥时垂直力度向上，下挥时可向下或较小向上
-                const forceY = this._isSwingUp ? this.hitForceY : this.hitForceY * 0.5;
-                const impulse = new Vec2(this.hitForceX * dirX, forceY);
-                ballBody.applyLinearImpulseToCenter(impulse, true);
-                // 防止一帧内多次击打（松开键前只打一次，可通过添加冷却，这里简单置位）
-                this._hitLocked = true;
-                if (this._gameManager && this._gameManager.onPlayerHitBall) {
-                    this._gameManager.onPlayerHitBall(this.playerId);
-                }
-                return true;
-            }
+    private selectHitAction(): HitAction | null {
+        if (!this.canHit()) {
+            return null;
         }
 
-        return false;
+        const ballWorldPos = this.shuttlecockNode.getWorldPosition();
+        const playerWorldPos = this.node.getWorldPosition();
+        const dx = ballWorldPos.x - playerWorldPos.x;
+        const dy = ballWorldPos.y - playerWorldPos.y;
+
+        return chooseHitAction(dx, dy, this.getHitDecisionConfig());
+    }
+
+    private canHit(): boolean {
+        return Boolean(this.racketNode && this.shuttlecockNode && this.shuttlecockNode.active && !this._hitLocked);
+    }
+
+    private performHit(): boolean {
+        if (!this.canHit()) {
+            return false;
+        }
+
+        const action = this.selectHitAction();
+        if (!action) {
+            return false;
+        }
+        this._currentHitAction = action;
+
+        if (this._gameManager?.canApplyBallPhysics && !this._gameManager.canApplyBallPhysics()) {
+            return false;
+        }
+
+        const ballBody = this.shuttlecockNode.getComponent(RigidBody2D);
+        if (!ballBody) {
+            return false;
+        }
+
+        const dirX = this.playerId === 1 ? 1 : -1;
+        const impulse =
+            action === 'low'
+                ? new Vec2(this.lowHitForceX * dirX, this.lowHitForceY)
+                : new Vec2(this.hitForceX * dirX, this.hitForceY);
+
+        ballBody.applyLinearImpulseToCenter(impulse, true);
+        this._hitLocked = true;
+        this._hitCooldownRemaining = this.hitCooldown;
+        if (this._gameManager && this._gameManager.onPlayerHitBall) {
+            this._gameManager.onPlayerHitBall(this.playerId);
+        }
+        return true;
+    }
+
+    private getHitDecisionConfig(): HitDecisionConfig {
+        return {
+            hitRangeX: this.hitRangeX > 0 ? this.hitRangeX : this.hitRange,
+            hitRangeY: this.hitRangeY > 0 ? this.hitRangeY : this.hitRange,
+            lowHitThreshold: this.lowHitThreshold,
+            highHitMinY: this.highHitMinY,
+        };
+    }
+
+    private updateHitLock(deltaTime: number): void {
+        if (!this._hitLocked) {
+            return;
+        }
+
+        this._hitCooldownRemaining = Math.max(0, this._hitCooldownRemaining - deltaTime);
+        if (!this.shuttlecockNode || !this.shuttlecockNode.active) {
+            this._hitLocked = false;
+            return;
+        }
+
+        const ballWorldPos = this.shuttlecockNode.getWorldPosition();
+        const playerWorldPos = this.node.getWorldPosition();
+        const dx = ballWorldPos.x - playerWorldPos.x;
+        const dy = ballWorldPos.y - playerWorldPos.y;
+        const shuttleStillInRange = isShuttleInHitRange(dx, dy, this.getHitDecisionConfig());
+
+        if (!shuttleStillInRange || this._hitCooldownRemaining <= 0) {
+            this._hitLocked = false;
+        }
     }
 
     // 更新腿部与左臂（非握拍手）的摆动
@@ -336,15 +439,16 @@ export class PlayerController extends Component {
 
         // 更新腿部摆动和手臂摆动（移动时才动）
         this.updateLimbAnimations(deltaTime);
+        this.updateHitLock(deltaTime);
 
         const jumpState = this._jumpMotion.step(this.node.position.y, deltaTime);
         if (jumpState.y !== this.node.position.y) {
             this.node.setPosition(this.node.position.x, jumpState.y, this.node.position.z);
         }
 
-        // 挥拍击球检测
+        // 击球动画期间持续检测，避免球在挥动中进入范围却漏判。
         if ((this._isSwingUp || this._isSwingDown) && this.racketNode && this.shuttlecockNode) {
-            this.checkAndHit();
+            this.performHit();
         }
     }
 }
