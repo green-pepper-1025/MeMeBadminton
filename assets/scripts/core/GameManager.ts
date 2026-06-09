@@ -130,6 +130,9 @@ export class GameManager extends Component {
     @property(SpriteFrame)
     public localCharacterSelectSpriteFrame: SpriteFrame = null;
 
+    @property(SpriteFrame)
+    public connectSpriteFrame: SpriteFrame = null;
+
     @property
     public characterBodyWidth: number = 96;
 
@@ -979,6 +982,11 @@ export class GameManager extends Component {
             lanRooms: this._lanRooms,
         });
 
+        if (this.connectSpriteFrame) {
+            this.addConnectRoomImageScreen(model);
+            return;
+        }
+
         this.addLabel(model.title, 0, 210, 38);
         this.addLabel(model.statusLines[0], 0, 160, 20);
         this.addLabel(model.statusLines[1], 0, 126, 22);
@@ -1129,6 +1137,50 @@ export class GameManager extends Component {
                 layout.height,
                 () => this.selectCharacter(playerId, character.characterId),
             );
+        });
+    }
+
+    private addConnectRoomImageScreen(model: ReturnType<typeof buildLanRoomViewModel>): void {
+        this.addImageBackground('ConnectBackground', this.connectSpriteFrame, 1280, 768);
+
+        const roomValue = this._roomSnapshot
+            ? model.roomStateText.replace(/^房间\s*/, '').replace(': ', ' / ')
+            : this._roomId;
+        this.addLabel(this._serverUrl, -55, 170, 20, 460);
+        this.addLabel(this._connectionStatus, -133, 133, 20, 305);
+        this.addLabel(roomValue, -106, 98, 20, 370);
+
+        this.addHitAreaButton('CreateLanRoomButton', -155, 47, 150, 52, () => this.createLanRoom());
+        this.addHitAreaButton('RefreshLanRoomButton', 0, 47, 150, 52, () => this.browseLanRooms());
+        this.addHitAreaButton('EditServerAddressButton', 164, 47, 150, 52, () => this.editServerAddress());
+
+        if (model.emptyListText) {
+            this.addLabel('未发现房间', -168, -62, 20, 190);
+            this.addLabel('点击刷新', 41, -62, 20, 130);
+            this.addLabel('等待搜索', 159, -62, 20, 130);
+        } else {
+            model.roomRows.slice(0, 5).forEach((row, index) => {
+                this.addConnectRoomListItem(row, -62 - index * 34);
+            });
+        }
+
+        this.addHitAreaButton('CancelConnectButton', 0, -308, 230, 64, () => this.enterMainMenu());
+    }
+
+    private addConnectRoomListItem(row: ReturnType<typeof buildLanRoomViewModel>['roomRows'][number], y: number): void {
+        const playerCountText = `${row.room.players}/${row.room.max_players}`;
+        const statusText = row.joinable ? '可加入' : '已满';
+
+        this.addLabel(row.room.room_name, -168, y, 18, 200);
+        this.addLabel(playerCountText, 41, y, 18, 90);
+        this.addLabel(statusText, 159, y, 18, 100);
+        this.addHitAreaButton(`ConnectRoomRow${row.room.room_id}`, 0, y, 480, 34, () => {
+            if (row.joinable) {
+                this.joinLanRoom(row.room);
+                return;
+            }
+            this._connectionStatus = '加入失败: 房间已满';
+            this.enterOnlineRoom();
         });
     }
 

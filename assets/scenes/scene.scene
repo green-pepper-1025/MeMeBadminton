@@ -343,6 +343,10 @@
       "__uuid__": "7083e4dc-14bf-4401-8321-3f63fe8f2c76@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
+    "connectSpriteFrame": {
+      "__uuid__": "2ee2716f-ca68-41dc-8cfa-46af098f9c10@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
     "characterBodyWidth": 96,
     "characterBodyHeight": 132,
     "leftKobeSkillPoint": {

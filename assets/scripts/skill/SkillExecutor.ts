@@ -8,15 +8,23 @@ import {
     KunSkillTrajectory,
     sampleKunSkillVelocity,
 } from './KunSkillModel';
+import {
+    applyNailongSkillEffect,
+    clearNailongSkillEffect,
+    DEFAULT_NAILONG_SKILL_CONFIG,
+    isNailongSpecialSkill,
+    NailongSkillConfig,
+    NailongSkillEffect,
+    NailongSkillTarget,
+    updateNailongSkillEffect,
+} from './NailongSkillModel';
 
 type SkillPlayerId = 'player1' | 'player2';
 
-interface DuangEffect {
+interface NailongRuntimeEffect {
     controller: unknown;
-    originalHitRange: number;
-    originalHitRangeX: number;
-    originalHitRangeY: number;
-    remaining: number;
+    playerNode: Node;
+    modelEffect: NailongSkillEffect;
 }
 
 interface KunSkillEffect {
@@ -26,9 +34,10 @@ interface KunSkillEffect {
 }
 
 export class SkillExecutor {
-    private readonly _duangEffects: Map<SkillPlayerId, DuangEffect> = new Map();
+    private readonly _nailongEffects: Map<SkillPlayerId, NailongRuntimeEffect> = new Map();
     public readonly kobeSkillConfig: KobeSkillConfig = { ...DEFAULT_KOBE_SKILL_CONFIG };
     public readonly kunSkillConfig: KunSkillConfig = { ...DEFAULT_KUN_SKILL_CONFIG };
+    public readonly nailongSkillConfig: NailongSkillConfig = { ...DEFAULT_NAILONG_SKILL_CONFIG };
     private _kunSkillEffect: KunSkillEffect = null;
 
     public execute(skillId: string, playerId: SkillPlayerId, playerNode: Node, ballNode: Node): boolean {
@@ -36,8 +45,8 @@ export class SkillExecutor {
             return false;
         }
 
-        if (skillId === 'duang') {
-            return this.executeDuang(playerId, playerNode);
+        if (isNailongSpecialSkill(skillId)) {
+            return this.executeNailongSpecial(skillId, playerId, playerNode);
         }
 
         if (!ballNode || !ballNode.active) {
@@ -56,35 +65,39 @@ export class SkillExecutor {
     }
 
     public update(deltaTime: number, ballNode: Node): void {
-        this.updateDuang(deltaTime);
+        this.updateNailongSkill(deltaTime);
         this.updateKunSkill(deltaTime, ballNode);
     }
 
     public clearEffects(): void {
-        this._duangEffects.forEach((effect) => this.restoreHitRange(effect));
-        this._duangEffects.clear();
+        this._nailongEffects.forEach((effect) => this.restoreNailongEffect(effect));
+        this._nailongEffects.clear();
         this._kunSkillEffect = null;
     }
 
-    private executeDuang(playerId: SkillPlayerId, playerNode: Node): boolean {
+    private executeNailongSpecial(skillId: string, playerId: SkillPlayerId, playerNode: Node): boolean {
         const controller = playerNode.getComponent('PlayerController') as unknown;
         if (!this.hasHitRange(controller)) {
             return false;
         }
 
-        const activeEffect = this._duangEffects.get(playerId);
-        const originalHitRange = activeEffect?.originalHitRange ?? controller.hitRange;
-        const originalHitRangeX = activeEffect?.originalHitRangeX ?? controller.hitRangeX;
-        const originalHitRangeY = activeEffect?.originalHitRangeY ?? controller.hitRangeY;
-        controller.hitRange = originalHitRange * 3;
-        controller.hitRangeX = originalHitRangeX * 3;
-        controller.hitRangeY = originalHitRangeY * 3;
-        this._duangEffects.set(playerId, {
+        const activeEffect = this._nailongEffects.get(playerId);
+        const target = this.createNailongTarget(controller, playerNode);
+        const modelEffect = applyNailongSkillEffect(
+            skillId,
+            target,
+            activeEffect?.modelEffect ?? null,
+            this.nailongSkillConfig,
+        );
+        if (!modelEffect) {
+            return false;
+        }
+
+        this.applyNailongTarget(controller, playerNode, target);
+        this._nailongEffects.set(playerId, {
             controller,
-            originalHitRange,
-            originalHitRangeX,
-            originalHitRangeY,
-            remaining: 3,
+            playerNode,
+            modelEffect,
         });
 
         return true;
@@ -156,18 +169,26 @@ export class SkillExecutor {
             .start();
     }
 
-    private updateDuang(deltaTime: number): void {
+    private updateNailongSkill(deltaTime: number): void {
         const expiredPlayers: SkillPlayerId[] = [];
-        this._duangEffects.forEach((effect, playerId) => {
-            effect.remaining -= deltaTime;
-            if (effect.remaining <= 0) {
-                this.restoreHitRange(effect);
+        this._nailongEffects.forEach((effect, playerId) => {
+            if (!this.hasHitRange(effect.controller) || !effect.playerNode?.isValid) {
                 expiredPlayers.push(playerId);
+                return;
             }
+
+            const target = this.createNailongTarget(effect.controller, effect.playerNode);
+            const nextEffect = updateNailongSkillEffect(effect.modelEffect, target, deltaTime);
+            this.applyNailongTarget(effect.controller, effect.playerNode, target);
+            if (!nextEffect) {
+                expiredPlayers.push(playerId);
+                return;
+            }
+            effect.modelEffect = nextEffect;
         });
 
         for (const playerId of expiredPlayers) {
-            this._duangEffects.delete(playerId);
+            this._nailongEffects.delete(playerId);
         }
     }
 
@@ -245,12 +266,38 @@ export class SkillExecutor {
         }
     }
 
-    private restoreHitRange(effect: DuangEffect): void {
-        if (this.hasHitRange(effect.controller)) {
-            effect.controller.hitRange = effect.originalHitRange;
-            effect.controller.hitRangeX = effect.originalHitRangeX;
-            effect.controller.hitRangeY = effect.originalHitRangeY;
+    private restoreNailongEffect(effect: NailongRuntimeEffect): void {
+        if (!this.hasHitRange(effect.controller) || !effect.playerNode?.isValid) {
+            return;
         }
+
+        const target = this.createNailongTarget(effect.controller, effect.playerNode);
+        clearNailongSkillEffect(effect.modelEffect, target);
+        this.applyNailongTarget(effect.controller, effect.playerNode, target);
+    }
+
+    private createNailongTarget(
+        controller: { hitRange: number; hitRangeX: number; hitRangeY: number },
+        playerNode: Node,
+    ): NailongSkillTarget {
+        const scale = playerNode.scale;
+        return {
+            hitRange: controller.hitRange,
+            hitRangeX: controller.hitRangeX,
+            hitRangeY: controller.hitRangeY,
+            scale: { x: scale.x, y: scale.y, z: scale.z },
+        };
+    }
+
+    private applyNailongTarget(
+        controller: { hitRange: number; hitRangeX: number; hitRangeY: number },
+        playerNode: Node,
+        target: NailongSkillTarget,
+    ): void {
+        controller.hitRange = target.hitRange;
+        controller.hitRangeX = target.hitRangeX;
+        controller.hitRangeY = target.hitRangeY;
+        playerNode.setScale(target.scale.x, target.scale.y, target.scale.z);
     }
 
     private hasHitRange(controller: unknown): controller is { hitRange: number; hitRangeX: number; hitRangeY: number } {
