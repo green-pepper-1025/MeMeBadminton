@@ -13,9 +13,16 @@ import {
     Vec3,
 } from 'cc';
 import { PlayerCommand } from './InputRouter';
-import { NetworkClient, BallStatePayload, LanRoomAdvertise, RoomSnapshot, ScoreUpdatePayload } from '../net/NetworkClient';
+import {
+    NetworkClient,
+    BallStatePayload,
+    LanRoomAdvertise,
+    RoomSnapshot,
+    ScoreUpdatePayload,
+} from '../net/NetworkClient';
 import { SkillExecutor } from '../skill/SkillExecutor';
 import { SkillPlayerId, SkillSystem } from '../skill/SkillSystem';
+import { AudioManager } from '../audio/AudioManager';
 import { LocalCharacterSelect } from './LocalCharacterSelect';
 import { buildScoreboardModel, buildSkillMeterModel } from './BattleHudModel';
 import { ShuttleCourtCollision } from '../ball/ShuttleCollision';
@@ -215,11 +222,12 @@ export class GameManager extends Component {
     private _connectionStatus: string = '未连接';
     private _roomSnapshot: RoomSnapshot = null;
     private _lanRooms: LanRoomAdvertise[] = [];
-    private _pendingNetworkAction: (() => void) = null;
+    private _pendingNetworkAction: () => void = null;
     private _pendingBallState: BallStatePayload = null;
     private _ballSyncElapsed: number = 0;
     private readonly _ballSyncInterval: number = 1 / 15;
     private readonly _network: NetworkClient = NetworkClient.getInstance();
+    private readonly _audioManager: AudioManager = AudioManager.getInstance();
     private readonly _skillSystem: SkillSystem = new SkillSystem();
     private readonly _skillExecutor: SkillExecutor = new SkillExecutor();
     private readonly _localCharacterSelect: LocalCharacterSelect = new LocalCharacterSelect('kobe', 'caixukun');
@@ -281,6 +289,7 @@ export class GameManager extends Component {
         this.createBattleHud();
         this.createFlowRoot();
         this.registerNetworkHandlers();
+        this._audioManager.playBackgroundMusic();
         this.enterMainMenu();
     }
 
@@ -305,6 +314,7 @@ export class GameManager extends Component {
         } else {
             this._score2++;
         }
+        this.playCharacterScoreCue(winner === 1 ? 'player1' : 'player2');
         this.updateScoreLabels();
 
         // 得分方获得发球权
@@ -438,6 +448,9 @@ export class GameManager extends Component {
         }
 
         const result = this._skillSystem.tryUseSkill(skillPlayerId);
+        if (result.success) {
+            this.playCharacterSkillCue(skillPlayerId);
+        }
         this.updateScoreLabels();
         return result.success;
     }
@@ -939,7 +952,13 @@ export class GameManager extends Component {
         } else {
             this._lanRooms.slice(0, 3).forEach((room, index) => {
                 const y = -128 - index * 46;
-                this.addLabel(`${room.room_name} / ${room.host_name} / ${room.players}-${room.max_players}`, -125, y, 18, 520);
+                this.addLabel(
+                    `${room.room_name} / ${room.host_name} / ${room.players}-${room.max_players}`,
+                    -125,
+                    y,
+                    18,
+                    520,
+                );
                 this.addButton('加入', 250, y, 120, 38, () => this.joinLanRoom(room), new Color(48, 148, 98, 255));
             });
         }
@@ -1154,6 +1173,7 @@ export class GameManager extends Component {
 
         this.clearFlowRoot();
         this.setBattleVisible(true);
+        this._audioManager.preloadCharacterCues();
         this.initializeSkills();
         this.resetMatch();
         this.applyCharacterSprites();
@@ -1454,6 +1474,9 @@ export class GameManager extends Component {
         this._roundsWon2 = payload.roundsWon2;
         this._currentServer = payload.currentServer;
         this._gameState = payload.gameState as GameState;
+        if (payload.winnerPlayerId) {
+            this.playCharacterScoreCue(payload.winnerPlayerId);
+        }
         this.updateScoreLabels();
         if (payload.gameState !== 'playing') {
             this.resetBall();
@@ -1694,6 +1717,28 @@ export class GameManager extends Component {
         }
 
         return null;
+    }
+
+    private playCharacterScoreCue(playerId: PlayerId): void {
+        const characterId = this.getPlayerCharacterId(playerId);
+        if (characterId) {
+            this._audioManager.playCharacterCue(characterId, 'score');
+        }
+    }
+
+    private playCharacterSkillCue(playerId: SkillPlayerId): void {
+        const characterId = this.getPlayerCharacterId(playerId);
+        if (characterId) {
+            this._audioManager.playCharacterCue(characterId, 'skill');
+        }
+    }
+
+    private getPlayerCharacterId(playerId: PlayerId): string | null {
+        return (
+            this._matchSetup?.players.find((player) => player.playerId === playerId)?.characterId ??
+            this._selectedCharacters[playerId] ??
+            null
+        );
     }
 
     private toSkillPlayerId(playerId: number): SkillPlayerId {
