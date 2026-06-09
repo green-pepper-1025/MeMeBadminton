@@ -70,6 +70,13 @@ interface SkillMeterHudRefs {
     color: Color;
 }
 
+interface LocalCharacterCardLayout {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
 @ccclass('GameManager')
 export class GameManager extends Component {
     @property(Label)
@@ -158,6 +165,18 @@ export class GameManager extends Component {
     private readonly _skillSystem: SkillSystem = new SkillSystem();
     private readonly _skillExecutor: SkillExecutor = new SkillExecutor();
     private readonly _localCharacterSelect: LocalCharacterSelect = new LocalCharacterSelect('kobe', 'caixukun');
+    private readonly _localCharacterCardLayouts: Record<PlayerId, LocalCharacterCardLayout[]> = {
+        player1: [
+            { x: -516, y: 37, width: 150, height: 240 },
+            { x: -356, y: 37, width: 150, height: 240 },
+            { x: -201, y: 37, width: 150, height: 240 },
+        ],
+        player2: [
+            { x: 204, y: 37, width: 150, height: 240 },
+            { x: 356, y: 37, width: 150, height: 240 },
+            { x: 510, y: 37, width: 150, height: 240 },
+        ],
+    };
     private _selectedCharacters: Record<PlayerId, string> = {
         player1: 'kobe',
         player2: 'caixukun',
@@ -832,14 +851,14 @@ export class GameManager extends Component {
 
     private addLocalCharacterSelectImageScreen(): void {
         this.addImageBackground('LocalCharacterSelectBackground', this.localCharacterSelectSpriteFrame, 1280, 768);
-        this.addLocalCharacterHitAreas('player1', [-500, -326, -176]);
-        this.addLocalCharacterHitAreas('player2', [213, 376, 499]);
+        this.addLocalCharacterHitAreas('player1');
+        this.addLocalCharacterHitAreas('player2');
         this.addHitAreaButton('ConfirmP1Button', -326, -146, 310, 82, () => this.confirmCharacter('player1'));
         this.addHitAreaButton('ConfirmP2Button', 337, -146, 310, 82, () => this.confirmCharacter('player2'));
         this.addHitAreaButton('BackToMainMenuButton', -6, -290, 330, 82, () => this.enterMainMenu());
 
-        this.addSelectedCharacterFrame('player1', [-500, -326, -176], new Color(64, 180, 255, 255));
-        this.addSelectedCharacterFrame('player2', [213, 376, 499], new Color(205, 92, 255, 255));
+        this.addSelectedCharacterFrame('player1', new Color(64, 180, 255, 255));
+        this.addSelectedCharacterFrame('player2', new Color(205, 92, 255, 255));
 
         if (this._localCharacterSelect.isConfirmed('player1')) {
             this.addLabel('P1 已确认', -318, 210, 26, 220);
@@ -849,29 +868,37 @@ export class GameManager extends Component {
         }
     }
 
-    private addLocalCharacterHitAreas(playerId: PlayerId, cardXs: number[]): void {
+    private addLocalCharacterHitAreas(playerId: PlayerId): void {
+        const cardLayouts = this._localCharacterCardLayouts[playerId];
         this._characters.forEach((character, index) => {
-            this.addHitAreaButton(`${playerId}${character.characterId}Card`, cardXs[index], 86, 145, 205, () =>
-                this.selectCharacter(playerId, character.characterId),
+            const layout = cardLayouts[index];
+            this.addHitAreaButton(
+                `${playerId}${character.characterId}Card`,
+                layout.x,
+                layout.y,
+                layout.width,
+                layout.height,
+                () => this.selectCharacter(playerId, character.characterId),
             );
         });
     }
 
-    private addSelectedCharacterFrame(playerId: PlayerId, cardXs: number[], color: Color): void {
+    private addSelectedCharacterFrame(playerId: PlayerId, color: Color): void {
         const selectedCharacterId = this._localCharacterSelect.getSelectedCharacter(playerId);
         const selectedIndex = this._characters.findIndex((character) => character.characterId === selectedCharacterId);
         if (selectedIndex < 0) {
             return;
         }
 
+        const layout = this._localCharacterCardLayouts[playerId][selectedIndex];
         const frameNode = new Node(`${playerId}SelectedFrame`);
         this._flowRoot.addChild(frameNode);
-        frameNode.setPosition(cardXs[selectedIndex], 86, 0);
-        frameNode.addComponent(UITransform).setContentSize(145, 205);
+        frameNode.setPosition(layout.x, layout.y, 0);
+        frameNode.addComponent(UITransform).setContentSize(layout.width, layout.height);
         const graphics = frameNode.addComponent(Graphics);
         graphics.strokeColor = color;
         graphics.lineWidth = 6;
-        graphics.roundRect(-72.5, -102.5, 145, 205, 8);
+        graphics.roundRect(-layout.width / 2, -layout.height / 2, layout.width, layout.height, 8);
         graphics.stroke();
     }
 
