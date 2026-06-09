@@ -27,6 +27,7 @@ import { LocalCharacterSelect } from './LocalCharacterSelect';
 import { buildScoreboardModel, buildSkillMeterModel } from './BattleHudModel';
 import { ShuttleCourtCollision } from '../ball/ShuttleCollision';
 import { lockRoundForScore, startNextRally } from './RoundScoringModel';
+import { VictoryVideoManager } from '../media/VictoryVideoManager';
 const { ccclass, property } = _decorator;
 
 type GameState = 'waitingServe' | 'playing' | 'roundEnd' | 'matchEnd';
@@ -231,6 +232,7 @@ export class GameManager extends Component {
     private readonly _skillSystem: SkillSystem = new SkillSystem();
     private readonly _skillExecutor: SkillExecutor = new SkillExecutor();
     private readonly _localCharacterSelect: LocalCharacterSelect = new LocalCharacterSelect('kobe', 'caixukun');
+    private _victoryVideoManager: VictoryVideoManager = null;
     private readonly _localCharacterCardLayouts: Record<PlayerId, LocalCharacterCardLayout[]> = {
         player1: [
             { x: -516, y: 37, width: 150, height: 240 },
@@ -288,12 +290,14 @@ export class GameManager extends Component {
         this.collectBattleNodes();
         this.createBattleHud();
         this.createFlowRoot();
+        this._victoryVideoManager = new VictoryVideoManager(this._flowRoot);
         this.registerNetworkHandlers();
         this._audioManager.playBackgroundMusic();
         this.enterMainMenu();
     }
 
     onDestroy(): void {
+        this._victoryVideoManager?.cleanupOverlay();
         this.unregisterNetworkHandlers();
     }
 
@@ -510,7 +514,7 @@ export class GameManager extends Component {
         if (this._roundsWon1 >= this.roundsToWinMatch || this._roundsWon2 >= this.roundsToWinMatch) {
             this._gameState = 'matchEnd';
             console.log(`[比赛结束] 获胜方: P${winner}`);
-            this.enterResult({
+            this.enterResultWithVictoryVideo({
                 winnerPlayerId: winner === 1 ? 'player1' : 'player2',
                 player1RoundsWon: this._roundsWon1,
                 player2RoundsWon: this._roundsWon2,
@@ -894,6 +898,7 @@ export class GameManager extends Component {
             return;
         }
 
+        this._victoryVideoManager?.cleanupOverlay();
         this._flowRoot.removeAllChildren();
     }
 
@@ -1221,6 +1226,37 @@ export class GameManager extends Component {
         });
     }
 
+    private enterResultWithVictoryVideo(result: MatchResult): void {
+        if (this.isShowingResult(result)) {
+            return;
+        }
+
+        this._appState = 'result';
+        this._lastResult = result;
+        this._gameState = 'matchEnd';
+        this.setBattleVisible(false);
+        this.clearFlowRoot();
+
+        const winnerCharacterId = this.getPlayerCharacterId(result.winnerPlayerId);
+        if (!winnerCharacterId || !this._victoryVideoManager) {
+            this.enterResult(result);
+            return;
+        }
+
+        this._victoryVideoManager.playWinVideo(winnerCharacterId, () => {
+            this.enterResult(result);
+        });
+    }
+
+    private isShowingResult(result: MatchResult): boolean {
+        return (
+            this._appState === 'result' &&
+            this._lastResult?.winnerPlayerId === result.winnerPlayerId &&
+            this._lastResult?.player1RoundsWon === result.player1RoundsWon &&
+            this._lastResult?.player2RoundsWon === result.player2RoundsWon
+        );
+    }
+
     private createMatchSetup(): void {
         this._matchSetup = {
             roomId: this._roomId,
@@ -1480,6 +1516,13 @@ export class GameManager extends Component {
         this.updateScoreLabels();
         if (payload.gameState !== 'playing') {
             this.resetBall();
+        }
+        if (payload.gameState === 'matchEnd' && payload.winnerPlayerId) {
+            this.enterResultWithVictoryVideo({
+                winnerPlayerId: payload.winnerPlayerId,
+                player1RoundsWon: this._roundsWon1,
+                player2RoundsWon: this._roundsWon2,
+            });
         }
     };
 

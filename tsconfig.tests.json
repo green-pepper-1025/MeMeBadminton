@@ -14,6 +14,7 @@
         "assets/scripts/core/LocalCharacterSelect.ts",
         "assets/scripts/core/RoundScoringModel.ts",
         "assets/scripts/audio/CharacterAudioCues.ts",
+        "assets/scripts/media/VictoryVideoModel.ts",
         "assets/scripts/skill/KobeSpecialModel.ts",
         "assets/scripts/skill/SkillSystem.ts",
         "server/**/*.ts"
