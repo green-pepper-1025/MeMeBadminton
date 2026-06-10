@@ -7,7 +7,7 @@ export interface NailongSkillConfig {
 }
 
 export const DEFAULT_NAILONG_SKILL_CONFIG: NailongSkillConfig = {
-    duration: 10,
+    duration: 20,
     hitRangeMultiplier: 3,
     visualScaleMultiplier: 1.35,
 };

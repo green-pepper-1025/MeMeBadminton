@@ -40,7 +40,7 @@ function createState() {
 }
 
 function testDefaultNailongConfig(): void {
-    assertEqual(DEFAULT_NAILONG_SKILL_CONFIG.duration, 10, 'default Nailong special duration is 10 seconds');
+    assertEqual(DEFAULT_NAILONG_SKILL_CONFIG.duration, 20, 'default Nailong special duration is 20 seconds');
     assertEqual(DEFAULT_NAILONG_SKILL_CONFIG.hitRangeMultiplier, 3, 'default Nailong hit range multiplier is 3');
     assertEqual(DEFAULT_NAILONG_SKILL_CONFIG.visualScaleMultiplier, 1.35, 'default Nailong visual scale multiplier is 1.35');
 }
@@ -56,7 +56,7 @@ function testApplyExpandsRangeAndVisualScale(): void {
     assertClose(target.scale.x, 1.35, 'scale x expands by visual multiplier');
     assertClose(target.scale.y, 1.62, 'scale y expands by visual multiplier');
     assertClose(target.scale.z, 1, 'scale z is preserved');
-    assertEqual(effect?.remaining, 10, 'effect duration starts at default duration');
+    assertEqual(effect?.remaining, 20, 'effect duration starts at default duration');
 }
 
 function testRepeatedApplyDoesNotStackMultipliers(): void {
@@ -71,14 +71,14 @@ function testRepeatedApplyDoesNotStackMultipliers(): void {
     assertEqual(target.hitRangeY, 360, 'repeated apply does not stack hitRangeY');
     assertClose(target.scale.x, 1.35, 'repeated apply does not stack scale x');
     assertClose(target.scale.y, 1.62, 'repeated apply does not stack scale y');
-    assertEqual(effect?.remaining, 10, 'repeated apply refreshes duration');
+    assertEqual(effect?.remaining, 20, 'repeated apply refreshes duration');
 }
 
 function testExpiryRestoresOriginalState(): void {
     const target = createState();
     let effect = applyNailongSkillEffect(NAILONG_SPECIAL_SKILL_ID, target, null, DEFAULT_NAILONG_SKILL_CONFIG);
 
-    effect = updateNailongSkillEffect(effect, target, 10);
+    effect = updateNailongSkillEffect(effect, target, 20);
 
     assertEqual(effect, null, 'expired effect is cleared');
     assertEqual(target.hitRange, 80, 'expired effect restores hitRange');

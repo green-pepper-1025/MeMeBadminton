@@ -1,6 +1,7 @@
 const http = require('http');
 const dgram = require('dgram');
 const { WebSocketServer } = require('ws');
+const { getDiscoveryBroadcastTargets, getLocalIPv4Addresses } = require('./lan-discovery');
 
 const PORT = Number(process.env.PORT || 8787);
 const DISCOVERY_PORT = Number(process.env.DISCOVERY_PORT || 12345);
@@ -305,11 +306,17 @@ function advertiseHostRoom() {
         max_players: 2,
     }, 'player1');
     const payload = Buffer.from(JSON.stringify(message));
-    discoverySocket.send(payload, DISCOVERY_PORT, '255.255.255.255');
+    for (const target of getDiscoveryBroadcastTargets()) {
+        discoverySocket.send(payload, DISCOVERY_PORT, target, (error) => {
+            if (error) {
+                console.warn(`[lan-server] failed to advertise room to ${target}:${DISCOVERY_PORT}: ${error.message}`);
+            }
+        });
+    }
 }
 
 function getLocalAdvertiseAddress() {
-    return process.env.LAN_HOST || '127.0.0.1';
+    return process.env.LAN_HOST || getLocalIPv4Addresses()[0] || '127.0.0.1';
 }
 
 function handleDiscoveryMessage(raw, rinfo) {

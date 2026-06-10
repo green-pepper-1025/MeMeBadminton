@@ -122,7 +122,7 @@ export class GameManager extends Component {
     public wallBounceMaxAngle: number = -20;   // 反弹最大仰角
 
     @property
-    public wallBounceSpeed: number = 50;      // 反弹速度大小
+    public wallBounceSpeed: number = 12;      // 反弹速度大小
 
     // 发球基础力度
     @property
