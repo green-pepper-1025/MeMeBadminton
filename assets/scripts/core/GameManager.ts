@@ -25,6 +25,11 @@ import { SkillPlayerId, SkillSystem } from '../skill/SkillSystem';
 import { AudioManager } from '../audio/AudioManager';
 import { LocalCharacterSelect } from './LocalCharacterSelect';
 import { buildLanRoomViewModel, shouldRequestLanRoomBrowse } from './LanRoomFlowModel';
+import {
+    buildCharacterSelectFlowModel,
+    CharacterSelectFlowModel,
+    shouldEnterBattleFromRoomSnapshot,
+} from './CharacterSelectFlowModel';
 import { buildScoreboardModel, buildSkillMeterModel } from './BattleHudModel';
 import { ShuttleCourtCollision } from '../ball/ShuttleCollision';
 import { lockRoundForScore, startNextRally } from './RoundScoringModel';
@@ -110,19 +115,19 @@ export class GameManager extends Component {
     public roundsToWinMatch: number = 2;
 
     @property(Node)
-    public leftWallNode: Node = null;     // 左墙壁节点
+    public leftWallNode: Node = null; // 左墙壁节点
 
     @property(Node)
-    public rightWallNode: Node = null;    // 右墙壁节点
+    public rightWallNode: Node = null; // 右墙壁节点
 
     @property
-    public wallBounceMinAngle: number = -50;   // 反弹最小仰角
+    public wallBounceMinAngle: number = -50; // 反弹最小仰角
 
     @property
-    public wallBounceMaxAngle: number = -20;   // 反弹最大仰角
+    public wallBounceMaxAngle: number = -20; // 反弹最大仰角
 
     @property
-    public wallBounceSpeed: number = 12;      // 反弹速度大小
+    public wallBounceSpeed: number = 12; // 反弹速度大小
 
     // 发球基础力度
     @property
@@ -678,20 +683,18 @@ export class GameManager extends Component {
             const ballX = this.shuttlecock.worldPosition.x;
             const ballY = this.shuttlecock.worldPosition.y;
 
-            
-
             let bounced = false;
             let dirX = 0; // 反弹后水平方向：1 向右，-1 向左
 
-            const leftBoundX = this.leftWallNode.worldPosition.x+25;
-            const rightBoundX = this.rightWallNode.worldPosition.x-25;
+            const leftBoundX = this.leftWallNode.worldPosition.x + 25;
+            const rightBoundX = this.rightWallNode.worldPosition.x - 25;
 
             if (this.leftWallNode && ballX <= leftBoundX) {
                 bounced = true;
-                dirX = 1;   // 超出左墙，向右弹回
+                dirX = 1; // 超出左墙，向右弹回
             } else if (this.rightWallNode && ballX >= rightBoundX) {
                 bounced = true;
-                dirX = -1;  // 超出右墙，向左弹回
+                dirX = -1; // 超出右墙，向左弹回
             }
 
             if (bounced) {
@@ -699,7 +702,8 @@ export class GameManager extends Component {
                 const ballBody = this.shuttlecock.getComponent(RigidBody2D);
                 if (ballBody) {
                     // 随机仰角
-                    const angle = this.wallBounceMinAngle + Math.random() * (this.wallBounceMaxAngle - this.wallBounceMinAngle);
+                    const angle =
+                        this.wallBounceMinAngle + Math.random() * (this.wallBounceMaxAngle - this.wallBounceMinAngle);
                     const angleRad = angle * (Math.PI / 180);
 
                     const vx = Math.cos(angleRad) * this.wallBounceSpeed * dirX;
@@ -1054,14 +1058,19 @@ export class GameManager extends Component {
         } else {
             model.roomRows.slice(0, 5).forEach((row, index) => {
                 const y = -120 - index * 44;
-                this.addRoomListItem(row.label, y, () => {
-                    if (row.joinable) {
-                        this.joinLanRoom(row.room);
-                        return;
-                    }
-                    this._connectionStatus = '加入失败: 房间已满';
-                    this.enterOnlineRoom();
-                }, row.joinable);
+                this.addRoomListItem(
+                    row.label,
+                    y,
+                    () => {
+                        if (row.joinable) {
+                            this.joinLanRoom(row.room);
+                            return;
+                        }
+                        this._connectionStatus = '加入失败: 房间已满';
+                        this.enterOnlineRoom();
+                    },
+                    row.joinable,
+                );
             });
         }
 
@@ -1081,6 +1090,11 @@ export class GameManager extends Component {
 
         if (this._battleMode === 'local') {
             this.renderLocalCharacterSelect();
+            return;
+        }
+
+        if (this.localCharacterSelectSpriteFrame) {
+            this.addOnlineCharacterSelectImageScreen();
             return;
         }
 
@@ -1157,11 +1171,19 @@ export class GameManager extends Component {
     }
 
     private addLocalCharacterSelectImageScreen(): void {
+        const model = this.buildCurrentCharacterSelectFlowModel();
         this.addImageBackground('LocalCharacterSelectBackground', this.localCharacterSelectSpriteFrame, 1280, 768);
-        this.addLocalCharacterHitAreas('player1');
-        this.addLocalCharacterHitAreas('player2');
-        this.addHitAreaButton('ConfirmP1Button', -326, -146, 310, 82, () => this.confirmCharacter('player1'));
-        this.addHitAreaButton('ConfirmP2Button', 337, -146, 310, 82, () => this.confirmCharacter('player2'));
+        for (const player of model.players) {
+            if (player.canSelect) {
+                this.addLocalCharacterHitAreas(player.playerId);
+            }
+        }
+        if (model.players.find((player) => player.playerId === 'player1')?.canConfirm) {
+            this.addHitAreaButton('ConfirmP1Button', -326, -146, 310, 82, () => this.confirmCharacter('player1'));
+        }
+        if (model.players.find((player) => player.playerId === 'player2')?.canConfirm) {
+            this.addHitAreaButton('ConfirmP2Button', 337, -146, 310, 82, () => this.confirmCharacter('player2'));
+        }
         this.addHitAreaButton('BackToMainMenuButton', -6, -290, 330, 82, () => this.enterMainMenu());
 
         this.addSelectedCharacterFrame('player1', new Color(64, 180, 255, 255));
@@ -1172,6 +1194,51 @@ export class GameManager extends Component {
         }
         if (this._localCharacterSelect.isConfirmed('player2')) {
             this.addLabel('P2 已确认', 343, 210, 26, 220);
+        }
+    }
+
+    private addOnlineCharacterSelectImageScreen(): void {
+        const model = this.buildCurrentCharacterSelectFlowModel();
+        const localPlayer = model.players.find((player) => player.playerId === model.localPlayerId);
+        const remotePlayer = model.players.find((player) => player.playerId === model.remotePlayerId);
+
+        this.addImageBackground('OnlineCharacterSelectBackground', this.localCharacterSelectSpriteFrame, 1280, 768);
+        for (const player of model.players) {
+            if (player.canSelect) {
+                this.addLocalCharacterHitAreas(player.playerId);
+            }
+        }
+
+        if (localPlayer?.canConfirm) {
+            const confirmX = model.localPlayerId === 'player1' ? -326 : 337;
+            this.addHitAreaButton('ConfirmLocalOnlineCharacterButton', confirmX, -146, 310, 82, () =>
+                this.confirmCharacter(model.localPlayerId),
+            );
+        }
+        this.addHitAreaButton('BackToOnlineRoomButton', -6, -290, 330, 82, () => this.enterOnlineRoom());
+
+        this.addSelectedCharacterFrame('player1', new Color(64, 180, 255, 255));
+        this.addSelectedCharacterFrame('player2', new Color(205, 92, 255, 255));
+
+        if (localPlayer) {
+            const x = localPlayer.playerId === 'player1' ? -318 : 343;
+            this.addLabel(
+                `我方 ${localPlayer.playerId === 'player1' ? 'P1' : 'P2'} ${localPlayer.confirmed ? '已确认' : '选择中'}`,
+                x,
+                210,
+                24,
+                260,
+            );
+        }
+        if (remotePlayer) {
+            const x = remotePlayer.playerId === 'player1' ? -318 : 343;
+            this.addLabel(
+                `对方 ${remotePlayer.playerId === 'player1' ? 'P1' : 'P2'} ${remotePlayer.confirmed ? '已确认' : '选择中'}`,
+                x,
+                245,
+                22,
+                260,
+            );
         }
     }
 
@@ -1234,8 +1301,40 @@ export class GameManager extends Component {
         });
     }
 
+    private buildCurrentCharacterSelectFlowModel(): CharacterSelectFlowModel {
+        const selectedCharacters =
+            this._battleMode === 'local'
+                ? {
+                      player1: this._localCharacterSelect.getSelectedCharacter('player1'),
+                      player2: this._localCharacterSelect.getSelectedCharacter('player2'),
+                  }
+                : this._selectedCharacters;
+        const confirmedPlayers =
+            this._battleMode === 'local'
+                ? {
+                      player1: this._localCharacterSelect.isConfirmed('player1'),
+                      player2: this._localCharacterSelect.isConfirmed('player2'),
+                  }
+                : this._confirmedPlayers;
+
+        return buildCharacterSelectFlowModel({
+            mode: this._battleMode,
+            localPlayerId: this._localPlayerId,
+            selectedCharacters,
+            confirmedPlayers,
+        });
+    }
+
+    private getSelectedCharacterForCurrentSelect(playerId: PlayerId): string {
+        if (this._battleMode === 'local') {
+            return this._localCharacterSelect.getSelectedCharacter(playerId);
+        }
+
+        return this._selectedCharacters[playerId];
+    }
+
     private addSelectedCharacterFrame(playerId: PlayerId, color: Color): void {
-        const selectedCharacterId = this._localCharacterSelect.getSelectedCharacter(playerId);
+        const selectedCharacterId = this.getSelectedCharacterForCurrentSelect(playerId);
         const selectedIndex = this._characters.findIndex((character) => character.characterId === selectedCharacterId);
         if (selectedIndex < 0) {
             return;
@@ -1257,6 +1356,10 @@ export class GameManager extends Component {
         if (this._battleMode === 'local') {
             this._localCharacterSelect.selectCharacter(playerId, characterId);
             this.renderCharacterSelect();
+            return;
+        }
+
+        if (playerId !== this._localPlayerId) {
             return;
         }
 
@@ -1282,6 +1385,10 @@ export class GameManager extends Component {
             }
 
             this.renderCharacterSelect();
+            return;
+        }
+
+        if (playerId !== this._localPlayerId) {
             return;
         }
 
@@ -1555,7 +1662,10 @@ export class GameManager extends Component {
 
     private onNetworkError = (data: any): void => {
         this._connectionStatus = `错误: ${data?.message ?? '连接失败'}`;
-        if (this._appState === 'online_room' || (this._battleMode === 'online' && this._appState === 'character_select')) {
+        if (
+            this._appState === 'online_room' ||
+            (this._battleMode === 'online' && this._appState === 'character_select')
+        ) {
             this.enterOnlineRoom();
         }
     };
@@ -1603,6 +1713,12 @@ export class GameManager extends Component {
         for (const player of snapshot.players) {
             this._selectedCharacters[player.playerId] = player.characterId;
             this._confirmedPlayers[player.playerId] = player.isReady;
+        }
+
+        if (this._appState !== 'battle' && shouldEnterBattleFromRoomSnapshot(snapshot)) {
+            this.createMatchSetupFromSnapshot(snapshot);
+            this.startBattle('online');
+            return;
         }
 
         const connectedPlayers = snapshot.players.filter((player) => player.connected);
