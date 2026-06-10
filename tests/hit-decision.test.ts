@@ -1,4 +1,4 @@
-import { chooseHitAction, isShuttleInHitRange } from '../assets/scripts/core/HitDecision';
+import { chooseHitAction, chooseHitActionFromPoints, isShuttleInHitRange } from '../assets/scripts/core/HitDecision';
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
     if (actual !== expected) {
@@ -31,7 +31,25 @@ function testRejectsHitActionOutsideRange(): void {
     assertEqual(chooseHitAction(91, 36, config), null, 'out-of-range shuttle has no hit action');
 }
 
+function testChoosesHitActionFromHitPointInsteadOfPlayerCenter(): void {
+    const shuttle = { x: 370, y: -160 };
+    const hitPoint = { x: 367, y: -165 };
+    const playerCenter = { x: 500, y: -250 };
+
+    assertEqual(
+        chooseHitAction(shuttle.x - playerCenter.x, shuttle.y - playerCenter.y, config),
+        null,
+        'shuttle near Player2 racket is outside the player-centered hit range'
+    );
+    assertEqual(
+        chooseHitActionFromPoints(shuttle, hitPoint, config),
+        'high',
+        'shuttle near Player2 racket uses the hit point for hit selection'
+    );
+}
+
 testRejectsShuttleOutsideRectangularHitRange();
 testChoosesLowHitBelowLowThreshold();
 testChoosesHighHitAtOrAboveLowThreshold();
 testRejectsHitActionOutsideRange();
+testChoosesHitActionFromHitPointInsteadOfPlayerCenter();

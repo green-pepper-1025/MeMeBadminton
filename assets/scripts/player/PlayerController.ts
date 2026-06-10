@@ -13,7 +13,7 @@ import {
     tween,
 } from 'cc';
 import { CommandType, PlayerCommand } from '../core/InputRouter';
-import { chooseHitAction, HitAction, HitDecisionConfig, isShuttleInHitRange } from '../core/HitDecision';
+import { chooseHitActionFromPoints, HitAction, HitDecisionConfig, isShuttleInHitRange } from '../core/HitDecision';
 import { JumpMotion } from '../core/JumpMotion';
 const { ccclass, property } = _decorator;
 
@@ -362,11 +362,9 @@ export class PlayerController extends Component {
         }
 
         const ballWorldPos = this.shuttlecockNode.getWorldPosition();
-        const playerWorldPos = this.node.getWorldPosition();
-        const dx = ballWorldPos.x - playerWorldPos.x;
-        const dy = ballWorldPos.y - playerWorldPos.y;
+        const hitPointWorldPos = this.getHitPointWorldPosition();
 
-        return chooseHitAction(dx, dy, this.getHitDecisionConfig());
+        return chooseHitActionFromPoints(ballWorldPos, hitPointWorldPos, this.getHitDecisionConfig());
     }
 
     private canHit(): boolean {
@@ -434,6 +432,11 @@ export class PlayerController extends Component {
         };
     }
 
+    private getHitPointWorldPosition(): Vec3 {
+        const hitOrigin = this.hitPointNode ?? this.racketNode ?? this.node;
+        return hitOrigin.getWorldPosition();
+    }
+
     private updateHitLock(deltaTime: number): void {
         if (!this._hitLocked) {
             return;
@@ -445,12 +448,8 @@ export class PlayerController extends Component {
             return;
         }
 
-        if (!this.hitPointNode) {
-            // 如果未设置击球点，退化为使用球员节点
-            this.hitPointNode = this.racketNode ? this.racketNode : this.node;
-        }
         const ballWorldPos = this.shuttlecockNode.getWorldPosition();
-        const hitPointWorldPos = this.hitPointNode.getWorldPosition();
+        const hitPointWorldPos = this.getHitPointWorldPosition();
         const dx = ballWorldPos.x - hitPointWorldPos.x;
         const dy = ballWorldPos.y - hitPointWorldPos.y;
         const shuttleStillInRange = isShuttleInHitRange(dx, dy, this.getHitDecisionConfig());
