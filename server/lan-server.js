@@ -103,10 +103,18 @@ function broadcastSnapshotToUdpPeers(room, snapshot = getSnapshot(room)) {
         if (!player.clientId.startsWith('udp:') || !player.connected) continue;
         const peer = udpPeers.get(player.clientId);
         if (peer) {
-            sendUdp(peer.address, peer.port, makeWire('ROOM_SNAPSHOT', {
-                ...snapshot,
-                localPlayerId: player.playerId,
-            }, player.playerId));
+            sendUdp(
+                peer.address,
+                peer.port,
+                makeWire(
+                    'ROOM_SNAPSHOT',
+                    {
+                        ...snapshot,
+                        localPlayerId: player.playerId,
+                    },
+                    player.playerId,
+                ),
+            );
         }
     }
 }
@@ -187,10 +195,33 @@ function handleJoinRequest(client, data) {
     if (data.host && data.port) {
         pendingJoinClientId = client.clientId;
         client.pendingRoomId = data.room_id || DEFAULT_ROOM;
-        sendUdp(data.host, Number(data.port), makeWire('join_request', {
+        client.remoteHost = {
             room_id: client.pendingRoomId,
-            player_name: data.player_name || 'Player',
-        }, client.playerId));
+            host: data.host,
+            port: Number(data.port),
+        };
+        discoveredRooms.set(client.pendingRoomId, {
+            room_id: client.pendingRoomId,
+            room_name: data.room_name || client.pendingRoomId,
+            host_name: data.host_name || 'Host',
+            host: data.host,
+            port: Number(data.port),
+            players: Number(data.players || 1),
+            max_players: Number(data.max_players || 2),
+            lastSeenAt: Date.now(),
+        });
+        sendUdp(
+            data.host,
+            Number(data.port),
+            makeWire(
+                'join_request',
+                {
+                    room_id: client.pendingRoomId,
+                    player_name: data.player_name || 'Player',
+                },
+                client.playerId,
+            ),
+        );
         return;
     }
 
@@ -252,7 +283,11 @@ function handleCharacterReady(client, data) {
 
 function getDiscoveredHostForClient(client) {
     if (!client.room) return null;
-    return Array.from(discoveredRooms.values()).find((item) => item.room_id === client.room.roomId) || null;
+    return (
+        client.remoteHost ||
+        Array.from(discoveredRooms.values()).find((item) => item.room_id === client.room.roomId) ||
+        null
+    );
 }
 
 function isClientJoinedToRemoteHost(client) {
@@ -296,15 +331,19 @@ function advertiseHostRoom() {
     const host = clients.get(activeHostClientId);
     if (!host || !host.room || !host.isHost) return;
 
-    const message = makeWire('room_advertise', {
-        room_id: host.room.roomId,
-        room_name: host.hostRoomName || host.room.roomId,
-        host_name: host.hostName || 'Host',
-        host: getLocalAdvertiseAddress(),
-        port: GAME_PORT,
-        players: host.room.players.filter((player) => player.connected).length,
-        max_players: 2,
-    }, 'player1');
+    const message = makeWire(
+        'room_advertise',
+        {
+            room_id: host.room.roomId,
+            room_name: host.hostRoomName || host.room.roomId,
+            host_name: host.hostName || 'Host',
+            host: getLocalAdvertiseAddress(),
+            port: GAME_PORT,
+            players: host.room.players.filter((player) => player.connected).length,
+            max_players: 2,
+        },
+        'player1',
+    );
     const payload = Buffer.from(JSON.stringify(message));
     for (const target of getDiscoveryBroadcastTargets()) {
         discoverySocket.send(payload, DISCOVERY_PORT, target, (error) => {
@@ -380,11 +419,19 @@ function handleUdpGameMessage(raw, rinfo) {
         }
         rememberUdpPeer(remoteClientId, rinfo.address, rinfo.port, playerId);
         const snapshot = getSnapshot(room);
-        sendUdp(rinfo.address, rinfo.port, makeWire('join_response', {
-            success: true,
-            player_id: playerId,
-            room_snapshot: { ...snapshot, localPlayerId: playerId },
-        }, playerId));
+        sendUdp(
+            rinfo.address,
+            rinfo.port,
+            makeWire(
+                'join_response',
+                {
+                    success: true,
+                    player_id: playerId,
+                    room_snapshot: { ...snapshot, localPlayerId: playerId },
+                },
+                playerId,
+            ),
+        );
         broadcastSnapshot(room);
         return;
     }
@@ -397,10 +444,7 @@ function handleUdpGameMessage(raw, rinfo) {
             client.playerId = data.player_id || 'player2';
             client.isHost = false;
             const room = getRoom(client.pendingRoomId || DEFAULT_ROOM);
-            room.players = [
-                createPlayer('remote-host', 'player1'),
-                createPlayer(client.clientId, client.playerId),
-            ];
+            room.players = [createPlayer('remote-host', 'player1'), createPlayer(client.clientId, client.playerId)];
             client.room = room;
             const snapshot = data.room_snapshot || { ...getSnapshot(room), localPlayerId: client.playerId };
             send(client, 'ROOM_SNAPSHOT', snapshot);
@@ -446,7 +490,8 @@ function handleUdpGameMessage(raw, rinfo) {
         if (!player) return;
 
         player.isReady = Boolean(data.isReady);
-        host.room.matchStarted = host.room.players.length === 2 && host.room.players.every((item) => item.connected && item.isReady);
+        host.room.matchStarted =
+            host.room.players.length === 2 && host.room.players.every((item) => item.connected && item.isReady);
         const snapshot = getSnapshot(host.room);
         broadcastSnapshot(host.room);
 
@@ -463,7 +508,12 @@ function handleUdpGameMessage(raw, rinfo) {
         return;
     }
 
-    if (message.type === 'game_state' || message.type === 'game_start' || message.type === 'game_end' || message.type === 'map_sync') {
+    if (
+        message.type === 'game_state' ||
+        message.type === 'game_start' ||
+        message.type === 'game_end' ||
+        message.type === 'map_sync'
+    ) {
         for (const client of clients.values()) {
             if (!client.isHost) {
                 sendWire(client, makeWire(message.type, data, message.player_id || 'player1'));
@@ -525,16 +575,22 @@ wss.on('connection', (ws) => {
                 joinRoom(client, message.data?.roomId);
                 break;
             case 'CHARACTER_SELECT':
-                handleCharacterSelect(client, message.data || {});
                 if (!client.isHost && isClientJoinedToRemoteHost(client)) {
-                    forwardRoomFlowToDiscoveredHost(client, 'CHARACTER_SELECT', message.data || {});
+                    if (!forwardRoomFlowToDiscoveredHost(client, 'CHARACTER_SELECT', message.data || {})) {
+                        send(client, 'ERROR', { message: 'REMOTE_HOST_NOT_FOUND' });
+                    }
+                    break;
                 }
+                handleCharacterSelect(client, message.data || {});
                 break;
             case 'CHARACTER_READY':
-                handleCharacterReady(client, message.data || {});
                 if (!client.isHost && isClientJoinedToRemoteHost(client)) {
-                    forwardRoomFlowToDiscoveredHost(client, 'CHARACTER_READY', message.data || {});
+                    if (!forwardRoomFlowToDiscoveredHost(client, 'CHARACTER_READY', message.data || {})) {
+                        send(client, 'ERROR', { message: 'REMOTE_HOST_NOT_FOUND' });
+                    }
+                    break;
                 }
+                handleCharacterReady(client, message.data || {});
                 break;
             case 'PLAYER_INPUT':
             case 'BALL_STATE':
