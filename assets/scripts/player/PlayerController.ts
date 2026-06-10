@@ -105,7 +105,7 @@ export class PlayerController extends Component {
     public highHitMinY: number = 20;
 
     @property
-    public hitCooldown: number = 0.18;
+    public hitCooldown: number = 0;
 
     @property
     public playerId: number = 1; // 1 或 2，在编辑器里给 Player1 设为 1，Player2 设为 2
@@ -123,6 +123,7 @@ export class PlayerController extends Component {
     private _inputLockRemaining: number = 0;
     private _skillPoseLockRemaining: number = 0;
     private _currentHitAction: HitAction = 'high';
+    private _swingCanHit: boolean = false;
     private _groundY: number = -250;
     private _lastSwingAngle: number = 0;
     private _jumpMotion: JumpMotion = new JumpMotion({
@@ -247,6 +248,7 @@ export class PlayerController extends Component {
 
         const action = this.selectHitAction();
         if (!action) {
+            this.performHighHit();
             return;
         }
 
@@ -262,7 +264,7 @@ export class PlayerController extends Component {
 
         if (this._gameManager && this._gameManager.tryServe) {
             const racketWorldPos = this.racketNode.worldPosition;
-            const facingRight = this.playerId === 2; // P1 朝右，P2 朝左
+            const facingRight = this.playerId === 1; // P1 朝右，P2 朝左
             this._gameManager.tryServe(this.playerId, racketWorldPos, facingRight);
         }
     }
@@ -285,10 +287,12 @@ export class PlayerController extends Component {
         if (this.skillKey === KeyCode.SPACE) this.skillKey = KeyCode.ENTER;
     }
 
-    private playSwingAnimation(isUp: boolean) {
+    private playSwingAnimation(isUp: boolean, canHit: boolean = true) {
+        this._swingCanHit = canHit;
         if (!this.rightArmNode) {
             this._isSwingUp = false;
             this._isSwingDown = false;
+            this._swingCanHit = false;
             return;
         }
 
@@ -303,7 +307,9 @@ export class PlayerController extends Component {
             .to(this.swingDuration, { eulerAngles: new Vec3(0, 0, targetAngle) }, {
                 easing: 'quadOut',
                 onComplete: () => {
-                    this.performHit();
+                    if (canHit) {
+                        this.performHit();
+                    }
                 }
             })
             .to(this.swingRecoverDuration, { eulerAngles: new Vec3(0, 0, this.restArmAngle) }, {
@@ -311,6 +317,7 @@ export class PlayerController extends Component {
                 onComplete: () => {
                     this._isSwingUp = false;
                     this._isSwingDown = false;
+                    this._swingCanHit = false;
                 },
             })
             .start();
@@ -342,7 +349,7 @@ export class PlayerController extends Component {
         this._currentHitAction = 'high';
         this._isSwingUp = true;
         this._isSwingDown = false;
-        this.playSwingAnimation(true);
+        this.playSwingAnimation(true, tryHit);
         if (tryHit) {
             this.performHit();
         }
@@ -500,7 +507,7 @@ export class PlayerController extends Component {
         }
 
         // 击球动画期间持续检测，避免球在挥动中进入范围却漏判。
-        if ((this._isSwingUp || this._isSwingDown) && this.racketNode && this.shuttlecockNode) {
+        if ((this._isSwingUp || this._isSwingDown) && this._swingCanHit && this.racketNode && this.shuttlecockNode) {
             this.performHit();
         }
     }

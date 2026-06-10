@@ -391,7 +391,7 @@ export class GameManager extends Component {
 
             // 根据朝向计算发球方向（发球方向总是从发球方面向对方）
             const dirX = facingRight ? 1 : -1; // 右侧玩家面向左，左侧面向右
-            const impulse = new Vec2(this.serveForceX * dirX, this.serveForceY);
+            const impulse = new Vec2(Math.abs(this.serveForceX) * dirX, this.serveForceY);
             ballBody.applyLinearImpulseToCenter(impulse, true);
         }
 

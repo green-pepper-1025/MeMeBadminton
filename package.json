@@ -18,6 +18,7 @@
         "logs:collect": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/collect-logs.ps1"
     },
     "dependencies": {
+        "pptxgenjs": "^4.0.1",
         "ws": "^8.18.3"
     },
     "devDependencies": {
