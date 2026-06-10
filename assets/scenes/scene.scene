@@ -321,6 +321,15 @@
     "floorY": 30,
     "pointsToWinRound": 11,
     "roundsToWinMatch": 2,
+    "leftWallNode": {
+      "__id__": 21
+    },
+    "rightWallNode": {
+      "__id__": 25
+    },
+    "wallBounceMinAngle": -50,
+    "wallBounceMaxAngle": -20,
+    "wallBounceSpeed": 25,
     "serveForceX": -80,
     "serveForceY": 50,
     "kobeSpriteFrame": {

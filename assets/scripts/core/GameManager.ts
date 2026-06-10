@@ -109,6 +109,21 @@ export class GameManager extends Component {
     @property
     public roundsToWinMatch: number = 2;
 
+    @property(Node)
+    public leftWallNode: Node = null;     // 左墙壁节点
+
+    @property(Node)
+    public rightWallNode: Node = null;    // 右墙壁节点
+
+    @property
+    public wallBounceMinAngle: number = -50;   // 反弹最小仰角
+
+    @property
+    public wallBounceMaxAngle: number = -20;   // 反弹最大仰角
+
+    @property
+    public wallBounceSpeed: number = 50;      // 反弹速度大小
+
     // 发球基础力度
     @property
     public serveForceX: number = 300; // 水平方向
@@ -657,6 +672,41 @@ export class GameManager extends Component {
         const ballY = this.shuttlecock.worldPosition.y;
         if (ballY <= this.floorY) {
             this.onBallLanded(this.shuttlecock.worldPosition.x);
+        }
+        // ====== 墙壁反弹检测 ======
+        if (this._gameState === 'playing' && this.shuttlecock && this.shuttlecock.active) {
+            const ballX = this.shuttlecock.worldPosition.x;
+            const ballY = this.shuttlecock.worldPosition.y;
+
+            
+
+            let bounced = false;
+            let dirX = 0; // 反弹后水平方向：1 向右，-1 向左
+
+            const leftBoundX = this.leftWallNode.worldPosition.x+25;
+            const rightBoundX = this.rightWallNode.worldPosition.x-25;
+
+            if (this.leftWallNode && ballX <= leftBoundX) {
+                bounced = true;
+                dirX = 1;   // 超出左墙，向右弹回
+            } else if (this.rightWallNode && ballX >= rightBoundX) {
+                bounced = true;
+                dirX = -1;  // 超出右墙，向左弹回
+            }
+
+            if (bounced) {
+                console.log(`[墙壁检测] 球X: ${ballX}, 球Y: ${ballY}`);
+                const ballBody = this.shuttlecock.getComponent(RigidBody2D);
+                if (ballBody) {
+                    // 随机仰角
+                    const angle = this.wallBounceMinAngle + Math.random() * (this.wallBounceMaxAngle - this.wallBounceMinAngle);
+                    const angleRad = angle * (Math.PI / 180);
+
+                    const vx = Math.cos(angleRad) * this.wallBounceSpeed * dirX;
+                    const vy = Math.sin(angleRad) * this.wallBounceSpeed;
+                    ballBody.linearVelocity = new Vec2(vx, vy);
+                }
+            }
         }
     }
 
