@@ -95,8 +95,8 @@ export class PlayerController extends Component {
     // 击球判定
     @property(Node) public hitPointNode: Node = null;   // 击球判定点（球拍上的空节点）
     @property public hitRange: number = 80;
-    @property public hitRangeX: number = 80;
-    @property public hitRangeY: number = 120;
+    @property public hitRangeX: number = 90;
+    @property public hitRangeY: number = 150;
 
     @property
     public lowHitThreshold: number = -20;
@@ -105,7 +105,7 @@ export class PlayerController extends Component {
     public highHitMinY: number = 20;
 
     @property
-    public hitCooldown: number = 0;
+    public hitCooldown: number = 0.18;
 
     @property
     public playerId: number = 1; // 1 或 2，在编辑器里给 Player1 设为 1，Player2 设为 2

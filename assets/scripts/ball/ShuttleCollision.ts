@@ -77,7 +77,7 @@ export class ShuttleCourtCollision extends Component {
     public ceilingThickness: number = 20;
 
     @property
-    public ceilingRestitution: number = 0.2;
+    public ceilingRestitution: number = 0.05    ;
 
     @property
     public ceilingPushDown: number = 4;
